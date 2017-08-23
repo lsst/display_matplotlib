@@ -424,24 +424,22 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         self._zoomfac = zoomfac
 
-        xmin, xmax = self._xcen + 256/self._zoomfac*np.array([-1, 1])
-        ymin, ymax = self._ycen + 256/self._zoomfac*np.array([-1, 1])
+        x0, y0 = self._xy0
+        x1, y1 = x0 + self._width, y0 + self._height
 
-        xmin = -0.5 if xmin < 0 else self._width - 0.5 if xmin > self._width else xmin
-        xmax = -0.5 if xmax < 0 else self._width - 0.5 if xmin > self._width else xmax
-        ymin = -0.5 if ymin < 0 else self._height - 0.5 if ymin > self._height else ymin
-        ymax = -0.5 if ymax < 0 else self._height - 0.5 if ymin > self._height else ymax
+        size = min(self._width, self._height)
+        xmin, xmax = self._xcen + x0 + size/self._zoomfac*np.array([-1, 1])
+        ymin, ymax = self._ycen + y0 + size/self._zoomfac*np.array([-1, 1])
 
         ax = self._figure.gca()
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
-
+            
     def _pan(self, colc, rowc):
         """Pan to (colc, rowc)"""
 
-        x0, y0 = self._xy0
-        self._xcen = colc + x0
-        self._ycen = rowc + y0
+        self._xcen = colc
+        self._ycen = rowc
 
         self._zoom(self._zoomfac)        
 
