@@ -38,6 +38,7 @@ import numpy as np
 import numpy.ma as ma
 
 import lsst.afw.display as afwDisplay
+import lsst.afw.math as afwMath
 import lsst.afw.display.rgb as afwRgb
 import lsst.afw.display.interface as interface
 import lsst.afw.display.virtualDevice as virtualDevice
@@ -139,22 +140,50 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._maskTransparency = {None : 0.7}
         self._interpretMaskBits = interpretMaskBits # interpret mask bits in mtv
         self._mtvOrigin = mtvOrigin
-        self._xy0 = (0, 0)
 
         #
         # Support self._scale()
         #
         self._normalize = None
         #
-        # Hack to support self._erase() and also reporting pixel/mask values;  set in mtv
+        # Support self._erase(), reporting pixel/mask values, and zscale/minmax; set in mtv and setImage
         #
-        self._image = None
+        self._setImage(None)
 
     def __del__(self):
         del _mpFigures[self._display]
     #
     # Extensions to the API
     #
+    def setImage(self, image):
+        """Save an image and maybe mask to support zscale/minmax scaling
+
+        @param image   Exposure, MaskedImage, or Image
+
+        E.g.
+           disp.setImage(im)
+           disp.scale(algorithm='asinh', min="zscale", Q=8)
+           disp.mtv(im)
+
+        This is usually done for you by mtv(), but then you need two mtv() calls to set the scale:
+           disp.mtv(im)
+           disp.scale(algorithm='asinh', min="zscale", Q=8)
+           disp.mtv(im)
+        """
+        inputImage = image
+
+        image, mask, wcs = None, None, None
+        if hasattr(inputImage, "maskedImage"):
+            wcs = inputImage.getWcs()
+            inputImage = inputImage.maskedImage
+            
+        if hasattr(inputImage, "image"):
+            image = inputImage.image
+        if hasattr(inputImage, "mask"):
+            mask = inputImage.mask
+
+        self._setImage(image, mask, wcs)
+        
     def show_color_bar(show=True):
         """Show (or hide) the colour bar"""
         self._figure.colorbar(show)
@@ -190,14 +219,12 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._width, self._height = image.getDimensions()
         self._xcen = 0.5*self._width
         self._ycen = 0.5*self._height
-        self._xy0 = image.getXY0()
         #
-        # I hate to do this, but it's an easy way to make erase() work
-        # (I don't know how to just erase the overlays)
+        # I hate to do this, but it's an easy way to make erase() work (I don't know how to just erase the
+        # overlays), and it permits printing cursor values and minmax/zscale stretches.  We also save
+        # XY0
         #
-        self._image = image
-        self._mask = mask
-        self._wcs = wcs
+        self._setImage(image, mask, wcs)
         self._title = title
         #
         def format_coord(x, y, wcs=self._wcs, x0=self._xy0[0], y0=self._xy0[1],
@@ -308,6 +335,14 @@ class DisplayImpl(virtualDevice.DisplayImpl):
                 eventHandlers[self._figure] = EventHandler((evData, myText), self._figure)
                 
         self._figure.canvas.draw_idle()
+
+    def _setImage(self, image, mask=None, wcs=None):
+        """Save the current image, mask, wcs, and XY0"""
+        self._image = image
+        self._mask = mask
+        self._wcs = wcs
+        self._xy0 = self._image.getXY0() if self._image else (0, 0)
+
     #
     # Graphics commands
     #
@@ -413,13 +448,37 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     # Set gray scale
     #
     def _scale(self, algorithm, minval, maxval, unit, *args, **kwargs):
+        if minval == "minmax":
+            if self._image is None:
+                raise RuntimeError("You may only use minmax if an image is loaded into the display")
+
+            stats = afwMath.makeStatistics(self._image, afwMath.MIN | afwMath.MAX)
+            minval = stats.getValue(afwMath.MIN)
+            maxval = stats.getValue(afwMath.MAX)
+
         if algorithm is None:
             self._normalize = None
         elif algorithm == "asinh":
-            self._normalize = AsinhNormalize(minimum=minval,
-                                             dataRange=maxval - minval, Q=kwargs.get("Q", 0.0))
+            if minval == "zscale":
+                if self._image is None:
+                    raise RuntimeError("You may only use zscale if an image is loaded into the display")
+
+                self._normalize = AsinhZScaleNormalize(image=self._image, Q=kwargs.get("Q", 8.0))
+            else:
+                self._normalize = AsinhNormalize(minimum=minval,
+                                                 dataRange=maxval - minval, Q=kwargs.get("Q", 8.0))
+        elif algorithm == "linear":
+            if minval == "zscale":
+                if self._image is None:
+                    raise RuntimeError("You may only use zscale if an image is loaded into the display")
+
+                self._normalize = ZScaleNormalize(image=self._image,
+                                                  nSamples=kwargs.get("nSamples", 1000),
+                                                  contrast=kwargs.get("contrast", 0.25))
+            else:
+                self._normalize = LinearNormalize(minimum=minval, maximum=maxval)
         else:
-            self._normalize = LinearNormalize(minimum=minval, maximum=maxval)
+            raise RuntimeError("Unsupported stretch algorithm \"%s\"" % algorithm)
     #
     # Zoom and Pan
     #
@@ -471,6 +530,18 @@ class AsinhNormalize(Normalize):
         Normalize.__init__(self, vmin, vmax, clip)
 
         self.mapping = afwRgb.AsinhMapping(minimum, dataRange, Q)
+
+class AsinhZScaleNormalize(Normalize):
+    def __init__(self, vmin=None, vmax=None, clip=False, image=None, Q=8):
+        Normalize.__init__(self, vmin, vmax, clip)
+
+        self.mapping = afwRgb.AsinhZScaleMapping(image, Q)
+
+class ZScaleNormalize(Normalize):
+    def __init__(self, vmin=None, vmax=None, clip=False, image=None, nSamples=1000, contrast=0.25):
+        Normalize.__init__(self, vmin, vmax, clip)
+
+        self.mapping = afwRgb.ZScaleMapping(image, nSamples, contrast)
 
 class LinearNormalize(Normalize):
     def __init__(self, vmin=None, vmax=None, clip=False, minimum=0, maximum=1):
