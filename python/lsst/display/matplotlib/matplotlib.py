@@ -140,6 +140,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._maskTransparency = {None : 0.7}
         self._interpretMaskBits = interpretMaskBits # interpret mask bits in mtv
         self._mtvOrigin = mtvOrigin
+        self._mappable = None
 
         #
         # Support self._scale()
@@ -184,9 +185,11 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         self._setImage(image, mask, wcs)
         
-    def show_color_bar(show=True):
+    def show_colorbar(self, show=True):
         """Show (or hide) the colour bar"""
-        self._figure.colorbar(show)
+        if show:
+            if self._mappable:
+                self._figure.colorbar(self._mappable)
     #
     # Defined API
     #
@@ -320,10 +323,13 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         ax = self._figure.gca()
         bbox = data.getBBox()
-        ax.imshow(dataArr, origin='lower', interpolation='nearest',
-                  extent=(bbox.getBeginX() - 0.5, bbox.getEndX() - 0.5,
-                          bbox.getBeginY() - 0.5, bbox.getEndY() - 0.5),
-                  cmap=cmap, norm=norm)
+        mappable = ax.imshow(dataArr, origin='lower', interpolation='nearest',
+                             extent=(bbox.getBeginX() - 0.5, bbox.getEndX() - 0.5,
+                                     bbox.getBeginY() - 0.5, bbox.getEndY() - 0.5),
+                             cmap=cmap, norm=norm)
+
+        if not isMask:
+            self._mappable = mappable
 
         if False:
             if evData:
@@ -522,7 +528,12 @@ class Normalize(mpColors.Normalize):
 
     def __call__(self, value, clip=None):
         # Must return a MaskedArray
-        data = value.data - self.mapping.minimum[0]
+        if isinstance(value, np.ndarray):
+            data = value
+        else:
+            data = value.data
+
+        data = data - self.mapping.minimum[0]
         return ma.array(data*self.mapping.mapIntensityToUint8(data)/255.0)
 
 class AsinhNormalize(Normalize):
