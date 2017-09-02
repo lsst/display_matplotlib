@@ -200,7 +200,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._wcs = wcs
         self._title = title
         #
-        def format_coord(x, y, x0=self._xy0[0], y0=self._xy0[1],
+        def format_coord(x, y, wcs=self._wcs, x0=self._xy0[0], y0=self._xy0[1],
                          origin=afwImage.PARENT, bbox=self._image.getBBox(afwImage.PARENT)):
 
             fmt = '(%1.2f, %1.2f)' 
@@ -212,6 +212,10 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             col = int(x + 0.5)
             row = int(y + 0.5)
             if bbox.contains(afwGeom.PointI(col, row)):
+                if wcs is not None:
+                    ra, dec = wcs.pixelToSky(x, y)
+                    msg += " (%9.4f, %9.4f)" % (ra, dec)
+
                 col -= x0
                 row -= y0
 
