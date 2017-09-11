@@ -31,6 +31,7 @@ import os
 import re
 import sys
 import time
+import unicodedata
 
 import matplotlib.pyplot as pyplot
 import matplotlib.colors as mpColors
@@ -141,6 +142,9 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._interpretMaskBits = interpretMaskBits # interpret mask bits in mtv
         self._mtvOrigin = mtvOrigin
         self._mappable = None
+        #
+        self.__alpha = unicodedata.lookup("GREEK SMALL LETTER alpha") # used in cursor display string
+        self.__delta = unicodedata.lookup("GREEK SMALL LETTER delta") # used in cursor display string
 
         #
         # Support self._scale()
@@ -244,7 +248,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             if bbox.contains(afwGeom.PointI(col, row)):
                 if wcs is not None:
                     ra, dec = wcs.pixelToSky(x, y)
-                    msg += " (%9.4f, %9.4f)" % (ra, dec)
+                    msg += r" (%s, %s): (%9.4f, %9.4f)" % (self.__alpha, self.__delta, ra, dec)
 
                 col -= x0
                 row -= y0
