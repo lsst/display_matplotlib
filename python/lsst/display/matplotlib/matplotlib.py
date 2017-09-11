@@ -505,6 +505,10 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         ymin, ymax = self._ycen + y0 + size/self._zoomfac*np.array([-1, 1])
 
         ax = self._figure.gca()
+
+        tb = self._figure.canvas.toolbar
+        tb.push_current()               # save the current zoom in the view stack
+
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
             
