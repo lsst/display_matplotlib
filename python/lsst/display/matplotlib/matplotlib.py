@@ -49,76 +49,9 @@ import lsst.afw.image as afwImage
 import lsst.afw.geom as afwGeom
 
 try:
-    _mpFigures
+    eventHandlers
 except NameError:
-    _mpFigures = {0 : None}              # matplotlib (actually pyplot) figures
     eventHandlers = {}                  # event handlers for matplotlib figures
-
-def getMpFigure(fig=None, clear=True):
-    """Return a pyplot figure(); if fig is supplied save it and make it the default
-    fig may also be a bool (make a new figure) or an int (return or make a figure (1-indexed;
-    python-list style -n supported)
-    """
-
-    if not pyplot:
-        raise RuntimeError("I am unable to plot as I failed to import matplotlib")
-
-    if not isinstance(fig, int):
-        raise RuntimeError("I'm sorry, but matplotlib uses integers to identify plots")
-
-    i = fig
-    if i == 0:
-        raise RuntimeError("I'm sorry, but matplotlib uses 1-indexed figures")
-    if i < 0:
-        try:
-            i = sorted(_mpFigures.keys())[i] # simulate list's [-n] syntax
-        except IndexError:
-            if _mpFigures:
-                print("Illegal index: %d" % i, file=sys.stderr)
-            i = 1
-
-    def lift(fig):
-        fig.canvas._tkcanvas._root().lift() # == Tk's raise, but raise is a python reserved word
-
-    if _mpFigures.has_key(i):
-        try:
-            lift(_mpFigures[i])
-        except Exception, e:
-            del _mpFigures[i]
-
-    if not _mpFigures.has_key(i):
-        for j in range(1, i):
-            getMpFigure(j, clear=False)
-
-        _mpFigures[i] = pyplot.figure()
-        #
-        # Modify pyplot.figure().show() to make it raise the plot too
-        #
-        def show(self, _show=_mpFigures[i].show):
-            _show(self)
-            try:
-                lift(self)
-            except Exception, e:
-                pass
-        # create a bound method
-        import types
-        _mpFigures[i].show = types.MethodType(show, _mpFigures[i], _mpFigures[i].__class__)
-
-    fig = _mpFigures[i]
-
-    if not fig:
-        i = sorted(_mpFigures.keys())[0]
-        if i > 0:
-            fig = _mpFigures[i[-1]]
-        else:
-            fig = getMpFigure(1)
-
-    if clear:
-        fig.clf()
-
-    pyplot.figure(fig.number)           # make it active
-
-    return fig
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -136,7 +69,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         """
         virtualDevice.DisplayImpl.__init__(self, display, verbose)
 
-        self._figure = getMpFigure(fig=display.frame + 1, clear=True)
+        self._figure = pyplot.figure(display.frame)
         self._display = display
         self._maskTransparency = {None : 0.7}
         self._interpretMaskBits = interpretMaskBits # interpret mask bits in mtv
@@ -338,12 +271,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         if False:
             if evData:
-                axes = self._figure.get_axes()[0]
-                myText = axes.text(0.05, 1.05, 'Press "return" to show intensity here',
-                                   transform=axes.transAxes, va='top')
-                
                 global eventHandlers
-                eventHandlers[self._figure] = EventHandler((evData, myText), self._figure)
+                eventHandlers[self._figure] = EventHandler()
                 
         self._figure.canvas.draw_idle()
 
@@ -366,20 +295,22 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     def _erase(self):
         """Erase the display"""
         #
-        # Rather than erase only the glyphs we'll redraw the image. We don't call
-        # self._mtv() as it resets e.g. the zoom
+        # Rather than erase only the glyphs we'll redraw the image.
         #
-        # This isn't a good solution.
+        # This isn't a great solution.
         #
         self._figure.clf()
 
         if self._image:
-            self._i_mtv(self._image, self._wcs, self._title, False)
-            if self._mask:
-                self._i_mtv(self._mask, self._wcs, self._title, True)
-            if self._title:
-                self._figure.gca().set_title(self._title)
-            self._zoom(self._zoomfac)
+            zoomfac = self._zoomfac
+            xcen = self._xcen
+            ycen = self._ycen
+
+            self._mtv(self._image, mask=self._mask, wcs=self._wcs, title=self._title)
+
+            self._xcen = xcen
+            self._ycen = ycen
+            self._zoom(zoomfac)
 
         self._figure.canvas.draw_idle()
 
