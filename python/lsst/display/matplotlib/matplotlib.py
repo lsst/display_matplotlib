@@ -270,6 +270,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             if isinstance(a, AxesImage):
                 a.get_cursor_data = lambda ev: None # disabled
 
+        self._figure.tight_layout()
         self._figure.canvas.draw_idle()
 
     def _i_mtv(self, data, wcs, title, isMask):
