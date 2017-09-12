@@ -32,9 +32,13 @@ import re
 import sys
 import time
 import unicodedata
+import warnings
 
 import matplotlib.pyplot as pyplot
+import matplotlib.cbook
 import matplotlib.colors as mpColors
+from matplotlib.blocking_input import BlockingInput
+
 import numpy as np
 import numpy.ma as ma
 
@@ -47,11 +51,6 @@ import lsst.afw.display.ds9Regions as ds9Regions
 import lsst.afw.image as afwImage
 
 import lsst.afw.geom as afwGeom
-
-try:
-    eventHandlers
-except NameError:
-    eventHandlers = {}                  # event handlers for matplotlib figures
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -78,7 +77,6 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         #
         self.__alpha = unicodedata.lookup("GREEK SMALL LETTER alpha") # used in cursor display string
         self.__delta = unicodedata.lookup("GREEK SMALL LETTER delta") # used in cursor display string
-
         #
         # Support self._scale()
         #
@@ -87,6 +85,11 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         # Support self._erase(), reporting pixel/mask values, and zscale/minmax; set in mtv and setImage
         #
         self._setImage(None)
+        #
+        # Ignore warnings due to BlockingKeyInput
+        #
+        if not verbose:
+            warnings.filterwarnings("ignore",category=matplotlib.cbook.mplDeprecation)
 
     def __del__(self):
         del _mpFigures[self._display]
@@ -269,11 +272,6 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         if not isMask:
             self._mappable = mappable
 
-        if False:
-            if evData:
-                global eventHandlers
-                eventHandlers[self._figure] = EventHandler()
-                
         self._figure.canvas.draw_idle()
 
     def _setImage(self, image, mask=None, wcs=None):
@@ -444,6 +442,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
             
+        self._figure.canvas.draw_idle()
+
     def _pan(self, colc, rowc):
         """Pan to (colc, rowc)"""
 
@@ -452,10 +452,49 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         self._zoom(self._zoomfac)        
 
-    def XXX_getEvent(self):
+    def _getEvent(self, timeout=-1):
         """Listen for a key press, returning (key, x, y)"""
 
-        raise RuntimeError("Write me")
+        mpBackend = matplotlib.get_backend() 
+        if mpBackend in ["nbAgg"]:
+            raise NotImplementedError("The %s matplotlib backend doesn't support a blocking event loop" %
+                                      mpBackend)
+
+        blocking_input = BlockingKeyInput(self._figure)
+        return blocking_input(timeout=timeout)
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+class BlockingKeyInput(BlockingInput):
+    """
+    Callable class to retrieve a single keyboard click
+    """
+    def __init__(self, fig):
+        BlockingInput.__init__(self, fig=fig, eventslist=('key_press_event',))
+
+    def post_event(self):
+        """
+        Return the event containing the key and (x, y)
+        """
+        try:
+            event = self.events[-1]
+        except IndexError:
+            self.ev = None
+        else:
+            self.ev = interface.Event(event.key, event.xdata, event.ydata)
+
+    def __call__(self, timeout=-1):
+        """
+        Blocking call to retrieve a single key click
+        Returns key or None if timeout
+        """
+        self.ev = None
+
+        BlockingInput.__call__(self, n=1, timeout=timeout)
+
+        return self.ev
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 class Normalize(mpColors.Normalize):
     def __init__(self, vmin=None, vmax=None, clip=False, minimum=0, dataRange=1, Q=8):
