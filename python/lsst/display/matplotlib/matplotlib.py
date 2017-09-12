@@ -55,6 +55,20 @@ import lsst.afw.geom as afwGeom
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 class DisplayImpl(virtualDevice.DisplayImpl):
+    """Provide a matplotlib backend for afwDisplay
+
+    Recommended backends in notebooks are:
+      %matplotlib notebook  (doesn't support reading back the cursor)
+    or
+      %matplotlib qt
+      %gui qt
+    or
+      %matplotlib inline    (no interaction, obviously)
+
+    It appears that
+      %matplotlib osx
+    doesn't work.
+    """
     server = None
 
     def __init__(self, display, verbose=False, interpretMaskBits=True, mtvOrigin=afwImage.PARENT,
