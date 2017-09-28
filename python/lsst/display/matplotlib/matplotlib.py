@@ -134,6 +134,9 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             
         if hasattr(inputImage, "image"):
             image = inputImage.image
+        else:
+            image = inputImage
+
         if hasattr(inputImage, "mask"):
             mask = inputImage.mask
 
