@@ -258,33 +258,37 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
             maskArr = np.zeros_like(dataArr, dtype=np.int32)
 
-            colors = ['black']
+            colorNames = ['black']
             colorGenerator = self.display.maskColorGenerator(omitBW=True)
             for p in planeList:
                 color = self.display.getMaskPlaneColor(planes[p]) if p in planes else None
 
                 if not color:            # none was specified
                     color = next(colorGenerator)
-
-                colors.append(color)
+                elif color.lower() == afwDisplay.IGNORE:
+                    color = 'black'     # we'll set alpha = 0 anyway
+                    
+                colorNames.append(color)
             #
             # Set the maskArr image to be an index into our colour map (cmap; see below)
             #
             for i, p in enumerate(planeList):
-                color = colors[i]
-                if color.lower() == "ignore":
-                    continue
-
-                maskArr[(dataArr & (1 << p)) != 0] += i + 1 # + 1 as we set colors[0] to black
+                color = colorNames[i]
+                maskArr[(dataArr & (1 << p)) != 0] += i + 1 # + 1 as we set colorNames[0] to black
 
             #
             # Convert those colours to RGBA so we can have per-mask-plane transparency
             # and build a colour map
             #
-            colors = mpColors.to_rgba_array(colors)
+            colors = mpColors.to_rgba_array(colorNames)
             colors[0][3] = 0.0          # it's black anyway
             for i, p in enumerate(planeList):
-                colors[i + 1][3] = 1 - self._getMaskTransparency(planes[p] if p in planes else None)
+                if colorNames[i + 1] == 'black':
+                    alpha = 0.0
+                else:
+                    alpha = 1 - self._getMaskTransparency(planes[p] if p in planes else None)
+
+                colors[i + 1][3] = alpha
 
             dataArr = maskArr
             cmap = mpColors.ListedColormap(colors)
