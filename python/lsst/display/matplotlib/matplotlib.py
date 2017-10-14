@@ -121,6 +121,12 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     #
     def setImage(self, image):
         """Save an image and maybe mask to support zscale/minmax scaling
+    def _close(self):
+        """!Close the display, cleaning up any allocated resources"""
+        self._image = None
+        self._mask = None
+        self._wcs = None
+        self._figure.gca().format_coord = None # keeps a copy of _wcs
 
         @param image   Exposure, MaskedImage, or Image
 
