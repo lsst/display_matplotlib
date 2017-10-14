@@ -102,6 +102,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         #
         # Support self._scale()
         #
+        self._scaleArgs = dict()
         self._normalize = None
         #
         # Support self._erase(), reporting pixel/mask values, and zscale/minmax; set in mtv and setImage
@@ -171,6 +172,11 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         """Display an Image and/or Mask on a matplotlib display
         """
         title = str(title) if title else ""
+
+        # We need to know the pixel values to support e.g. 'zscale' and 'minmax', so do the scaling now
+        if self._scaleArgs.get('algorithm'): # someone called self.scale()
+            self._i_scale(self._scaleArgs['algorithm'], self._scaleArgs['minval'], self._scaleArgs['maxval'],
+                          self._scaleArgs['unit'], *self._scaleArgs['args'], **self._scaleArgs['kwargs'])
 
         self._figure.clf()              # calling erase() calls _mtv
 
@@ -413,6 +419,20 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     # Set gray scale
     #
     def _scale(self, algorithm, minval, maxval, unit, *args, **kwargs):
+        self._scaleArgs['algorithm'] = algorithm
+        self._scaleArgs['minval'] = minval
+        self._scaleArgs['maxval'] = maxval
+        self._scaleArgs['unit'] = unit
+        self._scaleArgs['args'] = args
+        self._scaleArgs['kwargs'] = kwargs
+
+        try:
+            self._i_scale(algorithm, minval, maxval, unit, *args, **kwargs)
+        except (AttributeError, RuntimeError):
+            # Unable to access self._image; we'll try again when we run mtv
+            pass
+
+    def _i_scale(self, algorithm, minval, maxval, unit, *args, **kwargs):
         if minval == "minmax":
             if self._image is None:
                 raise RuntimeError("You may only use minmax if an image is loaded into the display")
