@@ -67,19 +67,18 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     """Provide a matplotlib backend for afwDisplay
 
     Recommended backends in notebooks are:
-      %matplotlib notebook  (doesn't support reading back the cursor)
+      %matplotlib notebook
     or
       %matplotlib qt
       %gui qt
     or
-      %matplotlib inline    (no interaction, obviously)
-
-    It appears that
+      %matplotlib inline
+    or 
       %matplotlib osx
-    doesn't work.
-    """
-    server = None
 
+    Apparently only qt supports Display.interact(); the list of interactive backends
+    is given by lsst.display.matplotlib.interactiveBackends
+    """
     def __init__(self, display, verbose=False, interpretMaskBits=True, mtvOrigin=afwImage.PARENT,
                  *args, **kwargs):
         """
