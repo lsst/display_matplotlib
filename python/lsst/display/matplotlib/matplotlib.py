@@ -53,6 +53,15 @@ import lsst.afw.image as afwImage
 import lsst.afw.geom as afwGeom
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+#
+# Set the list of backends which support _getEvent and thus interact()
+#
+try:
+    interactiveBackends
+except NameError:
+    interactiveBackends = [
+        "Qt4Agg",
+    ]
 
 class DisplayImpl(virtualDevice.DisplayImpl):
     """Provide a matplotlib backend for afwDisplay
@@ -472,11 +481,12 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     def _getEvent(self, timeout=-1):
         """Listen for a key press, returning (key, x, y)"""
 
-        mpBackend = matplotlib.get_backend() 
-        if mpBackend in ["nbAgg"]:
-            raise NotImplementedError("The %s matplotlib backend doesn't support a blocking event loop" %
-                                      mpBackend)
-
+        mpBackend = matplotlib.get_backend()
+        if mpBackend not in interactiveBackends:
+            print("The %s matplotlib backend doesn't support display._getEvent()" % 
+                  (matplotlib.get_backend(),), file=sys.stderr)
+            return interface.Event('q')
+        
         blocking_input = BlockingKeyInput(self._figure)
         return blocking_input(timeout=timeout)
 
