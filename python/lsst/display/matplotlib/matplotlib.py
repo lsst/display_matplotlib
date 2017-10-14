@@ -117,8 +117,6 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     #
     # Extensions to the API
     #
-    def setImage(self, image):
-        """Save an image and maybe mask to support zscale/minmax scaling
     def _close(self):
         """!Close the display, cleaning up any allocated resources"""
         self._image = None
@@ -126,35 +124,10 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._wcs = None
         self._figure.gca().format_coord = None # keeps a copy of _wcs
 
-        @param image   Exposure, MaskedImage, or Image
 
-        E.g.
-           disp.setImage(im)
-           disp.scale(algorithm='asinh', min="zscale", Q=8)
-           disp.mtv(im)
 
-        This is usually done for you by mtv(), but then you need two mtv() calls to set the scale:
-           disp.mtv(im)
-           disp.scale(algorithm='asinh', min="zscale", Q=8)
-           disp.mtv(im)
-        """
-        inputImage = image
 
-        image, mask, wcs = None, None, None
-        if hasattr(inputImage, "maskedImage"):
-            wcs = inputImage.getWcs()
-            inputImage = inputImage.maskedImage
-            
-        if hasattr(inputImage, "image"):
-            image = inputImage.image
-        else:
-            image = inputImage
 
-        if hasattr(inputImage, "mask"):
-            mask = inputImage.mask
-
-        self._setImage(image, mask, wcs)
-        
     def show_colorbar(self, show=True):
         """Show (or hide) the colour bar"""
         if show:
