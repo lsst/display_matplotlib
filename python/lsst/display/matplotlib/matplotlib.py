@@ -105,18 +105,15 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._scaleArgs = dict()
         self._normalize = None
         #
-        # Support self._erase(), reporting pixel/mask values, and zscale/minmax; set in mtv and setImage
+        # Support self._erase(), reporting pixel/mask values, and zscale/minmax; set in mtv
         #
-        self._setImage(None)
+        self._i_setImage(None)
         #
         # Ignore warnings due to BlockingKeyInput
         #
         if not verbose:
             warnings.filterwarnings("ignore",category=matplotlib.cbook.mplDeprecation)
 
-    #
-    # Extensions to the API
-    #
     def _close(self):
         """!Close the display, cleaning up any allocated resources"""
         self._image = None
@@ -167,6 +164,12 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         """
         title = str(title) if title else ""
 
+        #
+        # Save a reference to the image as it makes erase() easy and permits printing cursor values
+        # and minmax/zscale stretches.  We also save XY0
+        #
+        self._i_setImage(image, mask, wcs)
+        
         # We need to know the pixel values to support e.g. 'zscale' and 'minmax', so do the scaling now
         if self._scaleArgs.get('algorithm'): # someone called self.scale()
             self._i_scale(self._scaleArgs['algorithm'], self._scaleArgs['minval'], self._scaleArgs['maxval'],
@@ -182,17 +185,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             
         if title:
             ax.set_title(title)
-        
-        self._zoomfac = 1.0
-        self._width, self._height = image.getDimensions()
-        self._xcen = 0.5*self._width
-        self._ycen = 0.5*self._height
-        #
-        # I hate to do this, but it's an easy way to make erase() work (I don't know how to just erase the
-        # overlays), and it permits printing cursor values and minmax/zscale stretches.  We also save
-        # XY0
-        #
-        self._setImage(image, mask, wcs)
+
         self._title = title
         #
         def format_coord(x, y, wcs=self._wcs, x0=self._xy0[0], y0=self._xy0[1],
@@ -303,12 +296,21 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         self._figure.canvas.draw_idle()
 
-    def _setImage(self, image, mask=None, wcs=None):
+    def _i_setImage(self, image, mask=None, wcs=None):
         """Save the current image, mask, wcs, and XY0"""
         self._image = image
         self._mask = mask
         self._wcs = wcs
         self._xy0 = self._image.getXY0() if self._image else (0, 0)
+
+        self._zoomfac = 1.0
+        if self._image is None:
+            self._width, self._height = 0, 0
+        else:
+            self._width, self._height = self._image.getDimensions()
+
+        self._xcen = 0.5*self._width
+        self._ycen = 0.5*self._height
 
     #
     # Graphics commands
