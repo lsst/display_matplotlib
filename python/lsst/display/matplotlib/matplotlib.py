@@ -114,8 +114,6 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         if not verbose:
             warnings.filterwarnings("ignore",category=matplotlib.cbook.mplDeprecation)
 
-    def __del__(self):
-        del _mpFigures[self._display]
     #
     # Extensions to the API
     #
