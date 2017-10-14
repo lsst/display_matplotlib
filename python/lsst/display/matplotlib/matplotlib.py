@@ -480,6 +480,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         x1, y1 = x0 + self._width, y0 + self._height
 
         size = min(self._width, self._height)
+        if size < self._zoomfac:        # avoid min == max
+            size = self._zoomfac
         xmin, xmax = self._xcen + x0 + size/self._zoomfac*np.array([-1, 1])
         ymin, ymax = self._ycen + y0 + size/self._zoomfac*np.array([-1, 1])
 
