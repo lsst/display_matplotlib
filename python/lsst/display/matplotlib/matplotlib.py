@@ -124,10 +124,27 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._wcs = None
         self._figure.gca().format_coord = None # keeps a copy of _wcs
 
+    def _show(self):
+        """Put the plot at the top of the window stacking order"""
 
+        try:
+            self._figure.canvas._tkcanvas._root().lift() # tk
+        except AttributeError:
+            pass
 
+        try:
+            self._figure.canvas.manager.window.raise_() # os/x
+        except AttributeError:
+            pass
 
+        try:
+            self._figure.canvas.raise_() # qt[45]
+        except AttributeError:
+            pass
 
+    #
+    # Extensions to the API
+    #
     def show_colorbar(self, show=True):
         """Show (or hide) the colour bar"""
         if show:
