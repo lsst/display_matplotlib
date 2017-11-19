@@ -1,0 +1,3 @@
+I'm sure that there's a proper LSST way to do this, but
+    sphinx-build -b html . html
+creates html/index.html for your reading pleasure.

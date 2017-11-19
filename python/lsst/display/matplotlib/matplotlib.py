@@ -59,6 +59,7 @@ import lsst.afw.geom as afwGeom
 try:
     interactiveBackends
 except NameError:
+    ## List of backends that support `interact`
     interactiveBackends = [
         "Qt4Agg",
     ]
@@ -518,6 +519,10 @@ class BlockingKeyInput(BlockingInput):
     Callable class to retrieve a single keyboard click
     """
     def __init__(self, fig):
+        """Create a BlockingKeyInput
+
+        \param fig The figure to monitor for keyboard events
+        """
         BlockingInput.__init__(self, fig=fig, eventslist=('key_press_event',))
 
     def post_event(self):
@@ -527,6 +532,7 @@ class BlockingKeyInput(BlockingInput):
         try:
             event = self.events[-1]
         except IndexError:
+            ## details of the event to pass back to the display
             self.ev = None
         else:
             self.ev = interface.Event(event.key, event.xdata, event.ydata)
@@ -545,16 +551,14 @@ class BlockingKeyInput(BlockingInput):
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 class Normalize(mpColors.Normalize):
-    def __init__(self, vmin=None, vmax=None, clip=False, minimum=0, dataRange=1, Q=8):
-        mpColors.Normalize.__init__(self, vmin, vmax, clip)
-
-        if True:
-            self.mapping = afwRgb.AsinhMapping(minimum, dataRange, Q)
-        else:
-            self.mapping = afwRgb.LinearMapping(minimum, minimum+dataRange, Q)
+    """Class to support stretches for mtv()"""
 
     def __call__(self, value, clip=None):
-        # Must return a MaskedArray
+        """
+        Return a MaskedArray with value mapped to [0, 255]
+
+        @param value Input pixel value or array to be mapped
+        """
         if isinstance(value, np.ndarray):
             data = value
         else:
@@ -564,25 +568,61 @@ class Normalize(mpColors.Normalize):
         return ma.array(data*self.mapping.mapIntensityToUint8(data)/255.0)
 
 class AsinhNormalize(Normalize):
-    def __init__(self, vmin=None, vmax=None, clip=False, minimum=0, dataRange=1, Q=8):
-        Normalize.__init__(self, vmin, vmax, clip)
+    """Provide an asinh stretch for mtv()"""
+    def __init__(self, minimum=0, dataRange=1, Q=8):
+        """Initialise an object able to carry out an asinh mapping
 
+        @param minimum   Minimum pixel value (default: 0)
+        @param dataRange Range of values for stretch if Q=0; roughly the linear part (default: 1)
+        @param Q Softening parameter (default: 8)
+
+        See Lupton et al., PASP 116, 133
+        """
+        Normalize.__init__(self)
+
+        ## The object used to perform the desired mapping
         self.mapping = afwRgb.AsinhMapping(minimum, dataRange, Q)
 
 class AsinhZScaleNormalize(Normalize):
-    def __init__(self, vmin=None, vmax=None, clip=False, image=None, Q=8):
-        Normalize.__init__(self, vmin, vmax, clip)
+    """Provide an asinh stretch using zscale to set limits for mtv()"""
+    def __init__(self, image=None, Q=8):
+        """Initialise an object able to carry out an asinh mapping
 
+        @param image  image to use estimate minimum and dataRange using zscale (see AsinhNormalize)
+        @param Q Softening parameter (default: 8)
+
+        See Lupton et al., PASP 116, 133
+        """
+        Normalize.__init__(self)
+
+        ## The object used to perform the desired mapping
         self.mapping = afwRgb.AsinhZScaleMapping(image, Q)
 
 class ZScaleNormalize(Normalize):
-    def __init__(self, vmin=None, vmax=None, clip=False, image=None, nSamples=1000, contrast=0.25):
-        Normalize.__init__(self, vmin, vmax, clip)
+    """Provide a zscale stretch for mtv()"""
+    def __init__(self, image=None, nSamples=1000, contrast=0.25):
+        """Initialise an object able to carry out a zscale mapping
 
+        @param image to be used to estimate the stretch
+        @param nSamples Number of data points to use (default: 1000)
+        @param contrast Control the range of pixels to display around the median (default: 0.25)
+        """
+
+        Normalize.__init__(self)
+
+        ## The object used to perform the desired mapping
         self.mapping = afwRgb.ZScaleMapping(image, nSamples, contrast)
 
 class LinearNormalize(Normalize):
-    def __init__(self, vmin=None, vmax=None, clip=False, minimum=0, maximum=1):
-        Normalize.__init__(self, vmin, vmax, clip)
+    """Provide a linear stretch for mtv()"""
+    def __init__(self, minimum=0, maximum=1):
+        """Initialise an object able to carry out a linear mapping
 
+        @param minimum  Minimum value to display
+        @param maximum  Maximum value to display
+        """
+
+        Normalize.__init__(self)
+
+        ## The object used to perform the desired mapping
         self.mapping = afwRgb.LinearMapping(minimum, maximum)
