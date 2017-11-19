@@ -1,0 +1,2 @@
+To run tests, setup this package and then run
+   python $AFW_DIR/tests/test_display.py matplotlib
