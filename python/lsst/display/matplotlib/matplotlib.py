@@ -485,7 +485,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         ax = self._figure.gca()
 
         tb = self._figure.canvas.toolbar
-        tb.push_current()               # save the current zoom in the view stack
+        if tb is not None:              # It's None for e.g. %matplotlib inline in jupyter
+            tb.push_current()           # save the current zoom in the view stack
 
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
