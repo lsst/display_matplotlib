@@ -62,6 +62,7 @@ except NameError:
     ## List of backends that support `interact`
     interactiveBackends = [
         "Qt4Agg",
+        "Qt5Agg",
     ]
 
 class DisplayImpl(virtualDevice.DisplayImpl):
@@ -80,11 +81,13 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     Apparently only qt supports Display.interact(); the list of interactive backends
     is given by lsst.display.matplotlib.interactiveBackends
     """
-    def __init__(self, display, verbose=False, interpretMaskBits=True, mtvOrigin=afwImage.PARENT,
+    def __init__(self, display, verbose=False,
+                 interpretMaskBits=True, mtvOrigin=afwImage.PARENT, fastMaskDisplay=True,
                  *args, **kwargs):
         """
         Initialise a matplotlib display
 
+        @param fastMaskDisplay      XXX
         @param interpretMaskBits    Interpret the mask value under the cursor
         @param mtvOrigin            Display pixel coordinates with LOCAL origin
                                     (bottom left == 0,0 not XY0)
@@ -95,6 +98,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._display = display
         self._maskTransparency = {None : 0.7}
         self._interpretMaskBits = interpretMaskBits # interpret mask bits in mtv
+        self._fastMaskDisplay = fastMaskDisplay
         self._mtvOrigin = mtvOrigin
         self._mappable = None
         self._image_colormap = pyplot.cm.gray
@@ -144,6 +148,10 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     #
     # Extensions to the API
     #
+    def savefig(self, *args, **kwargs):
+        """Defer to figure.savefig()"""
+        self._figure.savefig(*args, **kwargs)
+
     def show_colorbar(self, show=True):
         """Show (or hide) the colour bar"""
         if show:
@@ -279,13 +287,6 @@ class DisplayImpl(virtualDevice.DisplayImpl):
                     
                 colorNames.append(color)
             #
-            # Set the maskArr image to be an index into our colour map (cmap; see below)
-            #
-            for i, p in enumerate(planeList):
-                color = colorNames[i]
-                maskArr[(dataArr & (1 << p)) != 0] += i + 1 # + 1 as we set colorNames[0] to black
-
-            #
             # Convert those colours to RGBA so we can have per-mask-plane transparency
             # and build a colour map
             #
@@ -299,7 +300,6 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
                 colors[i + 1][3] = alpha
 
-            dataArr = maskArr
             cmap = mpColors.ListedColormap(colors)
             norm = mpColors.NoNorm()
         else:
@@ -308,13 +308,32 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         ax = self._figure.gca()
         bbox = data.getBBox()
-        mappable = ax.imshow(dataArr, origin='lower', interpolation='nearest',
-                             extent=(bbox.getBeginX() - 0.5, bbox.getEndX() - 0.5,
-                                     bbox.getBeginY() - 0.5, bbox.getEndY() - 0.5),
-                             cmap=cmap, norm=norm)
+        extent = (bbox.getBeginX() - 0.5, bbox.getEndX() - 0.5,
+                  bbox.getBeginY() - 0.5, bbox.getEndY() - 0.5)
 
-        if not isMask:
-            self._mappable = mappable
+        with pyplot.rc_context(dict(interactive=False)):
+            if isMask:
+                if self._fastMaskDisplay:
+                    for p in reversed(planeList):
+                        if colors[p + 1][3] == 0:
+                            continue
+                        maskArr[(dataArr & (1 << p)) != 0] = p + 1 # + 1 as we set colorNames[0] to black
+
+                    ax.imshow(maskArr, origin='lower', interpolation='nearest',
+                              extent=extent, cmap=cmap, norm=norm)
+                else:
+                    for i, p in enumerate(planeList):
+                        if colors[i + 1][3] == 0:
+                            continue
+                        maskArr[:] = 0
+                        maskArr[(dataArr & (1 << p)) != 0] = i + 1 # + 1 as we set colorNames[0] to black
+
+                        ax.imshow(maskArr, origin='lower', interpolation='nearest',
+                                  extent=extent, cmap=cmap, norm=norm)
+            else:
+                mappable = ax.imshow(dataArr, origin='lower', interpolation='nearest',
+                                     extent=extent, cmap=cmap, norm=norm)
+                self._mappable = mappable
 
         self._figure.canvas.draw_idle()
 
@@ -338,7 +357,11 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     # Graphics commands
     #
     def _buffer(self, enable=True):
-        pass
+        if enable:
+            self._figure.draw()
+            pyplot.ion()
+        else:
+            pyplot.ioff()
 
     def _flush(self):
         pass
@@ -514,7 +537,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
-            
+        ax.set_aspect('equal', 'datalim');            
+
         self._figure.canvas.draw_idle()
 
     def _pan(self, colc, rowc):
