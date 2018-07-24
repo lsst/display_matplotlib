@@ -208,9 +208,9 @@ class DisplayImpl(virtualDevice.DisplayImpl):
                 col -= x0
                 row -= y0
 
-                msg += ' %1.3f' % (self._image.get(col, row))
+                msg += ' %1.3f' % (self._image[col, row])
                 if self._mask:
-                    val = self._mask.get(col, row)
+                    val = self._mask[col, row]
                     if self._interpretMaskBits:
                         msg += " [%s]" % self._mask.interpret(val)
                     else:
