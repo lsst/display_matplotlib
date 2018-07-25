@@ -366,8 +366,11 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         if isinstance(symb, afwGeom.ellipses.BaseCore):
             from matplotlib.patches import Ellipse
 
-            axis.add_artist(Ellipse((c + x0, r + y0), xradius=symb.getA(), yradius=symb.getB(),
-                                          rot_deg=math.degrees(symb.getTheta()), color=ctype))
+            # Following matplotlib.patches.Ellipse documentation 'width' and 'height' are diameters while 
+            # 'angle' is rotation in degrees (anti-clockwise)
+            axis.add_artist(Ellipse((c + x0, r + y0), height=2*symb.getA(), width=2*symb.getB(),
+                                    angle=90.+math.degrees(symb.getTheta()), 
+                                    edgecolor=ctype, facecolor='none'))
         elif symb == 'o':
             from matplotlib.patches import CirclePolygon as Circle
 
