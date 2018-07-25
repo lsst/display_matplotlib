@@ -205,9 +205,6 @@ class DisplayImpl(virtualDevice.DisplayImpl):
                     ra, dec = wcs.pixelToSky(x, y)
                     msg += r" (%s, %s): (%9.4f, %9.4f)" % (self.__alpha, self.__delta, ra, dec)
 
-                col -= x0
-                row -= y0
-
                 msg += ' %1.3f' % (self._image[col, row])
                 if self._mask:
                     val = self._mask[col, row]
