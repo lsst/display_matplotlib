@@ -38,6 +38,17 @@ class DisplayMatplotlibTestCase(unittest.TestCase):
         """Set the default backend to this package"""
         afwDisplay.setDefaultBackend("matplotlib")
 
+    def testSetImageColormap(self):
+        """This is a stand-in for an eventual testcase for changing image colormap
+        The basic outline should look something like:
+
+        afwDisplay.setDefaultBackend("matplotlib")
+        display = afwDisplay.Display()
+        display.setImageColormap('viridis')
+        assert display._image_colormap == 'viridis'
+        """
+        pass
+
 class TestMemory(lsst.utils.tests.MemoryTestCase):
     pass
 
