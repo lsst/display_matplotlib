@@ -97,6 +97,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._interpretMaskBits = interpretMaskBits # interpret mask bits in mtv
         self._mtvOrigin = mtvOrigin
         self._mappable = None
+        self._image_colormap = pyplot.cm.gray
         #
         self.__alpha = unicodedata.lookup("GREEK SMALL LETTER alpha") # used in cursor display string
         self.__delta = unicodedata.lookup("GREEK SMALL LETTER delta") # used in cursor display string
@@ -148,6 +149,29 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         if show:
             if self._mappable:
                 self._figure.colorbar(self._mappable)
+
+    def _setImageColormap(self, cmap):
+        """Set the colormap used for the image
+
+        cmap should be either the name of an attribute of pyplot.cm or an mpColors.Colormap
+        (e.g. "gray" or pyplot.cm.gray)
+
+        """
+        if not isinstance(cmap, mpColors.Colormap):
+            cmap = getattr(pyplot.cm, cmap)
+
+        self._image_colormap = cmap
+
+    # This will be moved into Display (DM-15218)
+    def setImageColormap(self, cmap):
+        """Set the colormap used for the image
+
+        cmap is a string to be interpreted by the backend; where possible
+        a string such as "gray" will be honoured, but backend
+        specific values are also permitted
+        """
+        self._setImageColormap(cmap)
+
     #
     # Defined API
     #
@@ -279,7 +303,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             cmap = mpColors.ListedColormap(colors)
             norm = mpColors.NoNorm()
         else:
-            cmap = pyplot.cm.gray
+            cmap = self._image_colormap
             norm = self._normalize
 
         ax = self._figure.gca()
