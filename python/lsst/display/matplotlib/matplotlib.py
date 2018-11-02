@@ -385,6 +385,17 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._xcen = 0.5*self._width
         self._ycen = 0.5*self._height
 
+    def _setImageColormap(self, cmap):
+        """Set the colormap used for the image
+
+        cmap should be either the name of an attribute of pyplot.cm or an mpColors.Colormap
+        (e.g. "gray" or pyplot.cm.gray)
+
+        """
+        if not isinstance(cmap, mpColors.Colormap):
+            cmap = getattr(pyplot.cm, cmap)
+
+        self._image_colormap = cmap
     #
     # Graphics commands
     #
