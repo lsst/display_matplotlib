@@ -65,6 +65,22 @@ except NameError:
         "Qt5Agg",
     ]
 
+try:
+    matplotlibCtypes
+except NameError:
+    matplotlibCtypes = {
+        afwDisplay.GREEN : "#00FF00",
+    }
+
+    def mapCtype(ctype):
+        """Map the ctype to a potentially different ctype
+
+        Specifically, if matplotlibCtypes[ctype] exists, use it instead
+
+        This is used e.g. to map "green" to a brighter shade
+        """
+        return matplotlibCtypes[ctype] if ctype in matplotlibCtypes else ctype
+
 class DisplayImpl(virtualDevice.DisplayImpl):
     """Provide a matplotlib backend for afwDisplay
 
@@ -417,11 +433,11 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             # 'angle' is rotation in degrees (anti-clockwise)
             axis.add_artist(Ellipse((c + x0, r + y0), height=2*symb.getA(), width=2*symb.getB(),
                                     angle=90.0 + math.degrees(symb.getTheta()), 
-                                    edgecolor=ctype, facecolor='none'))
+                                    edgecolor=mapCtype(ctype), facecolor='none'))
         elif symb == 'o':
             from matplotlib.patches import CirclePolygon as Circle
 
-            axis.add_artist(Circle((c + x0, r + y0), radius=size, color=ctype, fill=False))
+            axis.add_artist(Circle((c + x0, r + y0), radius=size, color=mapCtype(ctype), fill=False))
         else:
             from matplotlib.lines import Line2D
 
@@ -441,10 +457,10 @@ class DisplayImpl(virtualDevice.DisplayImpl):
                     x = args[i%2 == 0]
                     y = args[i%2 == 1]
 
-                    axis.add_line(Line2D(x, y, color=ctype))
+                    axis.add_line(Line2D(x, y, color=mapCtype(ctype)))
                 elif cmd == "text":
                     x, y = np.array(args[0:2]).astype(float) - 1.0
-                    axis.text(x, y, symb, color=ctype,
+                    axis.text(x, y, symb, color=mapCtype(ctype),
                               horizontalalignment='center', verticalalignment='center')
                 else:
                     raise RuntimeError(ds9Cmd)
@@ -462,7 +478,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         x = points[:, 0] + self._xy0[0]
         y = points[:, 1] + self._xy0[1]
 
-        self._figure.gca().add_line(Line2D(x, y, color=ctype))
+        self._figure.gca().add_line(Line2D(x, y, color=mapCtype(ctype)))
     #
     # Set gray scale
     #
