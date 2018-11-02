@@ -401,10 +401,10 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     #
     def _buffer(self, enable=True):
         if enable:
-            self._figure.draw()
-            pyplot.ion()
-        else:
             pyplot.ioff()
+        else:
+            pyplot.ion()
+            self._figure.show()
 
     def _flush(self):
         pass
