@@ -99,7 +99,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     """
     def __init__(self, display, verbose=False,
                  interpretMaskBits=True, mtvOrigin=afwImage.PARENT, fastMaskDisplay=True,
-                 *args, **kwargs):
+                 reopenPlot=False, *args, **kwargs):
         """
         Initialise a matplotlib display
 
@@ -107,9 +107,13 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         @param interpretMaskBits    Interpret the mask value under the cursor
         @param mtvOrigin            Display pixel coordinates with LOCAL origin
                                     (bottom left == 0,0 not XY0)
+        @param reopenPlot           If true, close the plot before opening it.
+                                    (useful with e.g. %ipympl)
         """
         virtualDevice.DisplayImpl.__init__(self, display, verbose)
 
+        if reopenPlot:
+            pyplot.close(display.frame)
         self._figure = pyplot.figure(display.frame)
         self._display = display
         self._maskTransparency = {None : 0.7}
