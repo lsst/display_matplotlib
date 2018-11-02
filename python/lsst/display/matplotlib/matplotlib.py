@@ -416,7 +416,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             # Following matplotlib.patches.Ellipse documentation 'width' and 'height' are diameters while 
             # 'angle' is rotation in degrees (anti-clockwise)
             axis.add_artist(Ellipse((c + x0, r + y0), height=2*symb.getA(), width=2*symb.getB(),
-                                    angle=90.+math.degrees(symb.getTheta()), 
+                                    angle=90.0 + math.degrees(symb.getTheta()), 
                                     edgecolor=ctype, facecolor='none'))
         elif symb == 'o':
             from matplotlib.patches import CirclePolygon as Circle
