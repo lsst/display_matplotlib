@@ -20,17 +20,14 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
-##
-## \file
-## \brief Definitions to talk to matplotlib from python using the "afwDisplay" interface
+#
+# \file
+# \brief Definitions to talk to matplotlib from python using the "afwDisplay" interface
 
 from __future__ import absolute_import, division, print_function
 
 import math
-import os
-import re
 import sys
-import time
 import unicodedata
 import warnings
 
@@ -52,14 +49,14 @@ import lsst.afw.image as afwImage
 
 import lsst.afw.geom as afwGeom
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
 # Set the list of backends which support _getEvent and thus interact()
 #
 try:
     interactiveBackends
 except NameError:
-    ## List of backends that support `interact`
+    # List of backends that support `interact`
     interactiveBackends = [
         "Qt4Agg",
         "Qt5Agg",
@@ -69,7 +66,7 @@ try:
     matplotlibCtypes
 except NameError:
     matplotlibCtypes = {
-        afwDisplay.GREEN : "#00FF00",
+        afwDisplay.GREEN : "#00FF00",   # noqa: ignore=E203
     }
 
     def mapCtype(ctype):
@@ -81,6 +78,7 @@ except NameError:
         """
         return matplotlibCtypes[ctype] if ctype in matplotlibCtypes else ctype
 
+
 class DisplayImpl(virtualDevice.DisplayImpl):
     """Provide a matplotlib backend for afwDisplay
 
@@ -91,7 +89,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
       %gui qt
     or
       %matplotlib inline
-    or 
+    or
       %matplotlib osx
 
     Apparently only qt supports Display.interact(); the list of interactive backends
@@ -117,15 +115,15 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             pyplot.close(display.frame)
         self._figure = pyplot.figure(display.frame)
         self._display = display
-        self._maskTransparency = {None : 0.7}
-        self._interpretMaskBits = interpretMaskBits # interpret mask bits in mtv
+        self._maskTransparency = {None : 0.7}  # noqa: ignore=E203
+        self._interpretMaskBits = interpretMaskBits  # interpret mask bits in mtv
         self._fastMaskDisplay = fastMaskDisplay
         self._mtvOrigin = mtvOrigin
         self._mappable = None
         self._image_colormap = pyplot.cm.gray
         #
-        self.__alpha = unicodedata.lookup("GREEK SMALL LETTER alpha") # used in cursor display string
-        self.__delta = unicodedata.lookup("GREEK SMALL LETTER delta") # used in cursor display string
+        self.__alpha = unicodedata.lookup("GREEK SMALL LETTER alpha")  # used in cursor display string
+        self.__delta = unicodedata.lookup("GREEK SMALL LETTER delta")  # used in cursor display string
         #
         # Support self._scale()
         #
@@ -139,30 +137,30 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         # Ignore warnings due to BlockingKeyInput
         #
         if not verbose:
-            warnings.filterwarnings("ignore",category=matplotlib.cbook.mplDeprecation)
+            warnings.filterwarnings("ignore", category=matplotlib.cbook.mplDeprecation)
 
     def _close(self):
         """!Close the display, cleaning up any allocated resources"""
         self._image = None
         self._mask = None
         self._wcs = None
-        self._figure.gca().format_coord = None # keeps a copy of _wcs
+        self._figure.gca().format_coord = None  # keeps a copy of _wcs
 
     def _show(self):
         """Put the plot at the top of the window stacking order"""
 
         try:
-            self._figure.canvas._tkcanvas._root().lift() # tk
+            self._figure.canvas._tkcanvas._root().lift()  # tk
         except AttributeError:
             pass
 
         try:
-            self._figure.canvas.manager.window.raise_() # os/x
+            self._figure.canvas.manager.window.raise_()  # os/x
         except AttributeError:
             pass
 
         try:
-            self._figure.canvas.raise_() # qt[45]
+            self._figure.canvas.raise_()  # qt[45]
         except AttributeError:
             pass
 
@@ -207,13 +205,15 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         while True:
             s = input(prompt)
             if allowPdb and s in ("p", "pdb"):
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
                 continue
 
             return s
     #
     # Defined API
     #
+
     def _setMaskTransparency(self, transparency, maskplane):
         """Specify mask transparency (percent)"""
 
@@ -233,9 +233,9 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         # and minmax/zscale stretches.  We also save XY0
         #
         self._i_setImage(image, mask, wcs)
-        
-        # We need to know the pixel values to support e.g. 'zscale' and 'minmax', so do the scaling now
-        if self._scaleArgs.get('algorithm'): # someone called self.scale()
+
+        #  We need to know the pixel values to support e.g. 'zscale' and 'minmax', so do the scaling now
+        if self._scaleArgs.get('algorithm'):  # someone called self.scale()
             self._i_scale(self._scaleArgs['algorithm'], self._scaleArgs['minval'], self._scaleArgs['maxval'],
                           self._scaleArgs['unit'], *self._scaleArgs['args'], **self._scaleArgs['kwargs'])
 
@@ -246,16 +246,16 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         if mask:
             self._i_mtv(mask, wcs, title, True)
-            
+
         if title:
             ax.set_title(title)
 
         self._title = title
-        #
+
         def format_coord(x, y, wcs=self._wcs, x0=self._xy0[0], y0=self._xy0[1],
                          origin=afwImage.PARENT, bbox=self._image.getBBox(afwImage.PARENT)):
 
-            fmt = '(%1.2f, %1.2f)' 
+            fmt = '(%1.2f, %1.2f)'
             if self._mtvOrigin == afwImage.PARENT:
                 msg = fmt % (x, y)
             else:
@@ -283,7 +283,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         from matplotlib.image import AxesImage
         for a in ax.mouseover_set:
             if isinstance(a, AxesImage):
-                a.get_cursor_data = lambda ev: None # disabled
+                a.get_cursor_data = lambda ev: None  # disabled
 
         self._figure.tight_layout()
         self._figure.canvas.draw_idle()
@@ -315,7 +315,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
                     color = next(colorGenerator)
                 elif color.lower() == afwDisplay.IGNORE:
                     color = 'black'     # we'll set alpha = 0 anyway
-                    
+
                 colorNames.append(color)
             #
             # Convert those colours to RGBA so we can have per-mask-plane transparency
@@ -352,14 +352,14 @@ class DisplayImpl(virtualDevice.DisplayImpl):
                     if bitIsSet.sum() == 0:
                         continue
 
-                    maskArr[bitIsSet] = i + 1 # + 1 as we set colorNames[0] to black
+                    maskArr[bitIsSet] = i + 1  # + 1 as we set colorNames[0] to black
 
-                    if not self._fastMaskDisplay: # we draw each bitplane separately
+                    if not self._fastMaskDisplay:  # we draw each bitplane separately
                         ax.imshow(maskArr, origin='lower', interpolation='nearest',
                                   extent=extent, cmap=cmap, norm=norm)
                         maskArr[:] = 0
 
-                if self._fastMaskDisplay: # we only draw the lowest bitplane
+                if self._fastMaskDisplay:  # we only draw the lowest bitplane
                     ax.imshow(maskArr, origin='lower', interpolation='nearest',
                               extent=extent, cmap=cmap, norm=norm)
             else:
@@ -396,9 +396,11 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             cmap = getattr(pyplot.cm, cmap)
 
         self._image_colormap = cmap
+
     #
     # Graphics commands
     #
+
     def _buffer(self, enable=True):
         if enable:
             pyplot.ioff()
@@ -442,8 +444,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             @:Mxx,Mxy,Myy    Draw an ellipse with moments (Mxx, Mxy, Myy) (argument size is ignored)
             An object derived from afwGeom.ellipses.BaseCore Draw the ellipse (argument size is ignored)
     Any other value is interpreted as a string to be drawn. Strings obey the fontFamily (which may be extended
-    with other characteristics, e.g. "times bold italic".  Text will be drawn rotated by textAngle (textAngle is
-    ignored otherwise).
+    with other characteristics, e.g. "times bold italic".  Text will be drawn rotated by textAngle
+    (textAngle is ignored otherwise).
 
     N.b. objects derived from BaseCore include Axes and Quadrupole.
     """
@@ -452,14 +454,14 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         axis = self._figure.gca()
         x0, y0 = self._xy0
-        
+
         if isinstance(symb, afwGeom.ellipses.BaseCore):
             from matplotlib.patches import Ellipse
 
-            # Following matplotlib.patches.Ellipse documentation 'width' and 'height' are diameters while 
+            # Following matplotlib.patches.Ellipse documentation 'width' and 'height' are diameters while
             # 'angle' is rotation in degrees (anti-clockwise)
             axis.add_artist(Ellipse((c + x0, r + y0), height=2*symb.getA(), width=2*symb.getB(),
-                                    angle=90.0 + math.degrees(symb.getTheta()), 
+                                    angle=90.0 + math.degrees(symb.getTheta()),
                                     edgecolor=mapCtype(ctype), facecolor='none'))
         elif symb == 'o':
             from matplotlib.patches import CirclePolygon as Circle
@@ -471,10 +473,10 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             for ds9Cmd in ds9Regions.dot(symb, c + x0, r + y0, size, fontFamily="helvetica", textAngle=None):
                 tmp = ds9Cmd.split('#')
                 cmd = tmp.pop(0).split()
-                comment = tmp.pop(0) if tmp else ""
+                comment = tmp.pop(0) if tmp else "" # noqa: ignore=F581
 
                 cmd, args = cmd[0], cmd[1:]
-                
+
                 if cmd == "line":
                     args = np.array(args).astype(float) - 1.0
 
@@ -506,10 +508,11 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         y = points[:, 1] + self._xy0[1]
 
         self._figure.gca().add_line(Line2D(x, y, color=mapCtype(ctype)))
-    #
-    # Set gray scale
-    #
+
     def _scale(self, algorithm, minval, maxval, unit, *args, **kwargs):
+        """
+        Set gray scale
+        """
         self._scaleArgs['algorithm'] = algorithm
         self._scaleArgs['minval'] = minval
         self._scaleArgs['maxval'] = maxval
@@ -558,13 +561,13 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     #
     # Zoom and Pan
     #
+
     def _zoom(self, zoomfac):
         """Zoom by specified amount"""
 
         self._zoomfac = zoomfac
 
         x0, y0 = self._xy0
-        x1, y1 = x0 + self._width, y0 + self._height
 
         size = min(self._width, self._height)
         if size < self._zoomfac:        # avoid min == max
@@ -580,7 +583,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
-        ax.set_aspect('equal', 'datalim');            
+        ax.set_aspect('equal', 'datalim')
 
         self._figure.canvas.draw_idle()
 
@@ -590,28 +593,29 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._xcen = colc
         self._ycen = rowc
 
-        self._zoom(self._zoomfac)        
+        self._zoom(self._zoomfac)
 
     def _getEvent(self, timeout=-1):
         """Listen for a key press, returning (key, x, y)"""
 
         mpBackend = matplotlib.get_backend()
         if mpBackend not in interactiveBackends:
-            print("The %s matplotlib backend doesn't support display._getEvent()" % 
+            print("The %s matplotlib backend doesn't support display._getEvent()" %
                   (matplotlib.get_backend(),), file=sys.stderr)
             return interface.Event('q')
-        
+
         blocking_input = BlockingKeyInput(self._figure)
         return blocking_input(timeout=timeout)
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
 
 class BlockingKeyInput(BlockingInput):
     """
     Callable class to retrieve a single keyboard click
     """
     def __init__(self, fig):
-        """Create a BlockingKeyInput
+        r"""Create a BlockingKeyInput
 
         \param fig The figure to monitor for keyboard events
         """
@@ -624,7 +628,7 @@ class BlockingKeyInput(BlockingInput):
         try:
             event = self.events[-1]
         except IndexError:
-            ## details of the event to pass back to the display
+            # details of the event to pass back to the display
             self.ev = None
         else:
             self.ev = interface.Event(event.key, event.xdata, event.ydata)
@@ -640,7 +644,8 @@ class BlockingKeyInput(BlockingInput):
 
         return self.ev
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
 
 class Normalize(mpColors.Normalize):
     """Class to support stretches for mtv()"""
@@ -659,6 +664,7 @@ class Normalize(mpColors.Normalize):
         data = data - self.mapping.minimum[0]
         return ma.array(data*self.mapping.mapIntensityToUint8(data)/255.0)
 
+
 class AsinhNormalize(Normalize):
     """Provide an asinh stretch for mtv()"""
     def __init__(self, minimum=0, dataRange=1, Q=8):
@@ -672,8 +678,9 @@ class AsinhNormalize(Normalize):
         """
         Normalize.__init__(self)
 
-        ## The object used to perform the desired mapping
+        # The object used to perform the desired mapping
         self.mapping = afwRgb.AsinhMapping(minimum, dataRange, Q)
+
 
 class AsinhZScaleNormalize(Normalize):
     """Provide an asinh stretch using zscale to set limits for mtv()"""
@@ -687,8 +694,9 @@ class AsinhZScaleNormalize(Normalize):
         """
         Normalize.__init__(self)
 
-        ## The object used to perform the desired mapping
+        # The object used to perform the desired mapping
         self.mapping = afwRgb.AsinhZScaleMapping(image, Q)
+
 
 class ZScaleNormalize(Normalize):
     """Provide a zscale stretch for mtv()"""
@@ -702,8 +710,9 @@ class ZScaleNormalize(Normalize):
 
         Normalize.__init__(self)
 
-        ## The object used to perform the desired mapping
+        # The object used to perform the desired mapping
         self.mapping = afwRgb.ZScaleMapping(image, nSamples, contrast)
+
 
 class LinearNormalize(Normalize):
     """Provide a linear stretch for mtv()"""
@@ -716,5 +725,5 @@ class LinearNormalize(Normalize):
 
         Normalize.__init__(self)
 
-        ## The object used to perform the desired mapping
+        # The object used to perform the desired mapping
         self.mapping = afwRgb.LinearMapping(minimum, maximum)
