@@ -191,16 +191,26 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         self._image_colormap = cmap
 
-    # This will be moved into Display (DM-15218)
-    def setImageColormap(self, cmap):
-        """Set the colormap used for the image
+    def wait(self, prompt="[c(ontinue) p(db)] :", allowPdb=True):
+        """Wait for keyboard input
 
-        cmap is a string to be interpreted by the backend; where possible
-        a string such as "gray" will be honoured, but backend
-        specific values are also permitted
+        @param prompt `str`
+           The prompt string.
+        @param allowPdb `bool`
+           If true, entering a 'p' or 'pdb' puts you into pdb
+
+        Returns the string you entered
+
+        Useful when plotting from a programme that exits such as a processCcd
+        Any key except 'p' continues; 'p' puts you into pdb (unless allowPdb is False)
         """
-        self._setImageColormap(cmap)
+        while True:
+            s = input(prompt)
+            if allowPdb and s in ("p", "pdb"):
+                import pdb; pdb.set_trace()
+                continue
 
+            return s
     #
     # Defined API
     #
