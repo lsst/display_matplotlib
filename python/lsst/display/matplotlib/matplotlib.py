@@ -103,7 +103,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         """
         Initialise a matplotlib display
 
-        @param fastMaskDisplay      XXX
+        @param fastMaskDisplay      If True, only show the first bitplane that's set
+                                    Not really what we want, but a bit faster
         @param interpretMaskBits    Interpret the mask value under the cursor
         @param mtvOrigin            Display pixel coordinates with LOCAL origin
                                     (bottom left == 0,0 not XY0)
@@ -333,23 +334,24 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         with pyplot.rc_context(dict(interactive=False)):
             if isMask:
-                if self._fastMaskDisplay:
-                    for p in reversed(planeList):
-                        if colors[p + 1][3] == 0:
-                            continue
-                        maskArr[(dataArr & (1 << p)) != 0] = p + 1 # + 1 as we set colorNames[0] to black
+                for i, p in reversed(list(enumerate(planeList))):
+                    if colors[i + 1][3] == 0:
+                        continue
 
-                    ax.imshow(maskArr, origin='lower', interpolation='nearest',
-                              extent=extent, cmap=cmap, norm=norm)
-                else:
-                    for i, p in enumerate(planeList):
-                        if colors[i + 1][3] == 0:
-                            continue
-                        maskArr[:] = 0
-                        maskArr[(dataArr & (1 << p)) != 0] = i + 1 # + 1 as we set colorNames[0] to black
+                    bitIsSet = (dataArr & (1 << p)) != 0
+                    if bitIsSet.sum() == 0:
+                        continue
 
+                    maskArr[bitIsSet] = i + 1 # + 1 as we set colorNames[0] to black
+
+                    if not self._fastMaskDisplay: # we draw each bitplane separately
                         ax.imshow(maskArr, origin='lower', interpolation='nearest',
                                   extent=extent, cmap=cmap, norm=norm)
+                        maskArr[:] = 0
+
+                if self._fastMaskDisplay: # we only draw the lowest bitplane
+                    ax.imshow(maskArr, origin='lower', interpolation='nearest',
+                              extent=extent, cmap=cmap, norm=norm)
             else:
                 mappable = ax.imshow(dataArr, origin='lower', interpolation='nearest',
                                      extent=extent, cmap=cmap, norm=norm)
