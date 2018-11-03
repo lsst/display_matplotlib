@@ -85,6 +85,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     Recommended backends in notebooks are:
       %matplotlib notebook
     or
+      %matplotlib ipympl
+    or
       %matplotlib qt
       %gui qt
     or
@@ -101,7 +103,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         """
         Initialise a matplotlib display
 
-        @param fastMaskDisplay      If True, only show the first bitplane that's set
+        @param fastMaskDisplay      If True, only show the first bitplane that's set in each pixel
+                                    (e.g. if (SATURATED & DETECTED), ignore DETECTED)
                                     Not really what we want, but a bit faster
         @param interpretMaskBits    Interpret the mask value under the cursor
         @param mtvOrigin            Display pixel coordinates with LOCAL origin
@@ -321,15 +324,19 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             # Convert those colours to RGBA so we can have per-mask-plane transparency
             # and build a colour map
             #
+            # Pixels equal to 0 don't get set (as no bits are set), so leave them transparent
+            # and start our colours at [1] -- hence "i + 1" below
+            #
             colors = mpColors.to_rgba_array(colorNames)
-            colors[0][3] = 0.0          # it's black anyway
+            alphaChannel = 3            # the alpha channel; the A in RGBA
+            colors[0][alphaChannel] = 0.0      # it's black anyway
             for i, p in enumerate(planeList):
                 if colorNames[i + 1] == 'black':
                     alpha = 0.0
                 else:
                     alpha = 1 - self._getMaskTransparency(planes[p] if p in planes else None)
 
-                colors[i + 1][3] = alpha
+                colors[i + 1][alphaChannel] = alpha
 
             cmap = mpColors.ListedColormap(colors)
             norm = mpColors.NoNorm()
@@ -345,7 +352,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         with pyplot.rc_context(dict(interactive=False)):
             if isMask:
                 for i, p in reversed(list(enumerate(planeList))):
-                    if colors[i + 1][3] == 0:
+                    if colors[i + 1][alphaChannel] == 0:  # colors[0] is reserved
                         continue
 
                     bitIsSet = (dataArr & (1 << p)) != 0
@@ -442,12 +449,10 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             *                Draw a *
             o                Draw a circle
             @:Mxx,Mxy,Myy    Draw an ellipse with moments (Mxx, Mxy, Myy) (argument size is ignored)
-            An object derived from afwGeom.ellipses.BaseCore Draw the ellipse (argument size is ignored)
+            An afwGeom.ellipses.Axes Draw the ellipse (argument size is ignored)
     Any other value is interpreted as a string to be drawn. Strings obey the fontFamily (which may be extended
     with other characteristics, e.g. "times bold italic".  Text will be drawn rotated by textAngle
     (textAngle is ignored otherwise).
-
-    N.b. objects derived from BaseCore include Axes and Quadrupole.
     """
         if not ctype:
             ctype = afwDisplay.GREEN
@@ -455,7 +460,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         axis = self._figure.gca()
         x0, y0 = self._xy0
 
-        if isinstance(symb, afwGeom.ellipses.BaseCore):
+        if isinstance(symb, afwGeom.ellipses.Axes):
             from matplotlib.patches import Ellipse
 
             # Following matplotlib.patches.Ellipse documentation 'width' and 'height' are diameters while
