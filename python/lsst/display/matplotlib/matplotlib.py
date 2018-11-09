@@ -180,18 +180,6 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             if self._mappable:
                 self._figure.colorbar(self._mappable)
 
-    def _setImageColormap(self, cmap):
-        """Set the colormap used for the image
-
-        cmap should be either the name of an attribute of pyplot.cm or an mpColors.Colormap
-        (e.g. "gray" or pyplot.cm.gray)
-
-        """
-        if not isinstance(cmap, mpColors.Colormap):
-            cmap = getattr(pyplot.cm, cmap)
-
-        self._image_colormap = cmap
-
     def wait(self, prompt="[c(ontinue) p(db)] :", allowPdb=True):
         """Wait for keyboard input
 
