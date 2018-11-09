@@ -26,6 +26,7 @@ import unittest
 import lsst.utils.tests
 import lsst.afw.display as afwDisplay
 
+
 class DisplayMatplotlibTestCase(unittest.TestCase):
 
     def setUp(self):
@@ -48,6 +49,7 @@ class DisplayMatplotlibTestCase(unittest.TestCase):
         assert display._image_colormap == 'viridis'
         """
         pass
+
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
     pass
