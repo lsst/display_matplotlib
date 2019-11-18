@@ -24,8 +24,6 @@
 # \file
 # \brief Definitions to talk to matplotlib from python using the "afwDisplay" interface
 
-from __future__ import absolute_import, division, print_function
-
 import math
 import sys
 import unicodedata
