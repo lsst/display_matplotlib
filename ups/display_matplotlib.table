@@ -1,5 +1,4 @@
 setupRequired(afw)
 setupRequired(matplotlib)
-setupRequired(python_future)
 
 envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
