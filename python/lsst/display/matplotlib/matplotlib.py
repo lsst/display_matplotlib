@@ -476,7 +476,6 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             for ds9Cmd in ds9Regions.dot(symb, c + x0, r + y0, size, fontFamily="helvetica", textAngle=None):
                 tmp = ds9Cmd.split('#')
                 cmd = tmp.pop(0).split()
-                comment = tmp.pop(0) if tmp else "" # noqa: ignore=F581
 
                 cmd, args = cmd[0], cmd[1:]
 
