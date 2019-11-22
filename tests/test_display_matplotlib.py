@@ -40,7 +40,9 @@ class DisplayMatplotlibTestCase(unittest.TestCase):
         afwDisplay.setDefaultBackend("matplotlib")
 
     def testSetImageColormap(self):
-        """This is a stand-in for an eventual testcase for changing image colormap
+        """This is a stand-in for an eventual testcase for changing image
+        colormap.
+
         The basic outline should look something like:
 
         afwDisplay.setDefaultBackend("matplotlib")

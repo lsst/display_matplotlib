@@ -22,9 +22,8 @@
 
 #
 # \file
-# \brief Definitions to talk to matplotlib from python using the "afwDisplay" interface
-
-from __future__ import absolute_import, division, print_function
+# \brief Definitions to talk to matplotlib from python using the "afwDisplay"
+#        interface
 
 import math
 import sys
@@ -49,7 +48,6 @@ import lsst.afw.image as afwImage
 
 import lsst.afw.geom as afwGeom
 
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
 # Set the list of backends which support _getEvent and thus interact()
 #
@@ -66,7 +64,7 @@ try:
     matplotlibCtypes
 except NameError:
     matplotlibCtypes = {
-        afwDisplay.GREEN : "#00FF00",   # noqa: ignore=E203
+        afwDisplay.GREEN: "#00FF00",
     }
 
     def mapCtype(ctype):
@@ -94,8 +92,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     or
       %matplotlib osx
 
-    Apparently only qt supports Display.interact(); the list of interactive backends
-    is given by lsst.display.matplotlib.interactiveBackends
+    Apparently only qt supports Display.interact(); the list of interactive
+    backends is given by lsst.display.matplotlib.interactiveBackends
     """
     def __init__(self, display, verbose=False,
                  interpretMaskBits=True, mtvOrigin=afwImage.PARENT, fastMaskDisplay=True,
@@ -103,8 +101,10 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         """
         Initialise a matplotlib display
 
-        @param fastMaskDisplay      If True, only show the first bitplane that's set in each pixel
-                                    (e.g. if (SATURATED & DETECTED), ignore DETECTED)
+        @param fastMaskDisplay      If True, only show the first bitplane
+                                    that's set in each pixel
+                                    (e.g. if (SATURATED & DETECTED), ignore
+                                    DETECTED)
                                     Not really what we want, but a bit faster
         @param interpretMaskBits    Interpret the mask value under the cursor
         @param mtvOrigin            Display pixel coordinates with LOCAL origin
@@ -118,7 +118,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             pyplot.close(display.frame)
         self._figure = pyplot.figure(display.frame)
         self._display = display
-        self._maskTransparency = {None : 0.7}  # noqa: ignore=E203
+        self._maskTransparency = {None: 0.7}
         self._interpretMaskBits = interpretMaskBits  # interpret mask bits in mtv
         self._fastMaskDisplay = fastMaskDisplay
         self._mtvOrigin = mtvOrigin
@@ -133,7 +133,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._scaleArgs = dict()
         self._normalize = None
         #
-        # Support self._erase(), reporting pixel/mask values, and zscale/minmax; set in mtv
+        # Support self._erase(), reporting pixel/mask values, and
+        # zscale/minmax; set in mtv
         #
         self._i_setImage(None)
         #
@@ -191,7 +192,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         Returns the string you entered
 
         Useful when plotting from a programme that exits such as a processCcd
-        Any key except 'p' continues; 'p' puts you into pdb (unless allowPdb is False)
+        Any key except 'p' continues; 'p' puts you into pdb (unless allowPdb
+        is False)
         """
         while True:
             s = input(prompt)
@@ -220,12 +222,13 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         title = str(title) if title else ""
 
         #
-        # Save a reference to the image as it makes erase() easy and permits printing cursor values
-        # and minmax/zscale stretches.  We also save XY0
+        # Save a reference to the image as it makes erase() easy and permits
+        # printing cursor values and minmax/zscale stretches.  We also save XY0
         #
         self._i_setImage(image, mask, wcs)
 
-        #  We need to know the pixel values to support e.g. 'zscale' and 'minmax', so do the scaling now
+        #  We need to know the pixel values to support e.g. 'zscale' and
+        # 'minmax', so do the scaling now
         if self._scaleArgs.get('algorithm'):  # someone called self.scale()
             self._i_scale(self._scaleArgs['algorithm'], self._scaleArgs['minval'], self._scaleArgs['maxval'],
                           self._scaleArgs['unit'], *self._scaleArgs['args'], **self._scaleArgs['kwargs'])
@@ -270,7 +273,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             return msg
 
         ax.format_coord = format_coord
-        # Stop images from reporting their value as we've already printed it nicely
+        # Stop images from reporting their value as we've already printed it
+        # nicely
         from matplotlib.image import AxesImage
         for a in ax.mouseover_set:
             if isinstance(a, AxesImage):
@@ -309,11 +313,12 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
                 colorNames.append(color)
             #
-            # Convert those colours to RGBA so we can have per-mask-plane transparency
-            # and build a colour map
+            # Convert those colours to RGBA so we can have per-mask-plane
+            # transparency and build a colour map
             #
-            # Pixels equal to 0 don't get set (as no bits are set), so leave them transparent
-            # and start our colours at [1] -- hence "i + 1" below
+            # Pixels equal to 0 don't get set (as no bits are set), so leave
+            # them transparent and start our colours at [1] --
+            # hence "i + 1" below
             #
             colors = mpColors.to_rgba_array(colorNames)
             alphaChannel = 3            # the alpha channel; the A in RGBA
@@ -383,8 +388,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     def _setImageColormap(self, cmap):
         """Set the colormap used for the image
 
-        cmap should be either the name of an attribute of pyplot.cm or an mpColors.Colormap
-        (e.g. "gray" or pyplot.cm.gray)
+        cmap should be either the name of an attribute of pyplot.cm or an
+        mpColors.Colormap (e.g. "gray" or pyplot.cm.gray)
 
         """
         if not isinstance(cmap, mpColors.Colormap):
@@ -432,14 +437,18 @@ class DisplayImpl(virtualDevice.DisplayImpl):
              fontFamily="helvetica", textAngle=None):
         """Draw a symbol at (col,row) = (c,r) [0-based coordinates]
     Possible values are:
-            +                Draw a +
-            x                Draw an x
-            *                Draw a *
-            o                Draw a circle
-            @:Mxx,Mxy,Myy    Draw an ellipse with moments (Mxx, Mxy, Myy) (argument size is ignored)
-            An afwGeom.ellipses.Axes Draw the ellipse (argument size is ignored)
-    Any other value is interpreted as a string to be drawn. Strings obey the fontFamily (which may be extended
-    with other characteristics, e.g. "times bold italic".  Text will be drawn rotated by textAngle
+            +                        Draw a +
+            x                        Draw an x
+            *                        Draw a *
+            o                        Draw a circle
+            @:Mxx,Mxy,Myy            Draw an ellipse with moments
+                                     (Mxx, Mxy, Myy) (argument size is ignored)
+            An afwGeom.ellipses.Axes Draw the ellipse (argument size is
+                                     ignored)
+
+    Any other value is interpreted as a string to be drawn. Strings obey the
+    fontFamily (which may be extended with other characteristics, e.g.
+    "times bold italic".  Text will be drawn rotated by textAngle
     (textAngle is ignored otherwise).
     """
         if not ctype:
@@ -451,8 +460,9 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         if isinstance(symb, afwGeom.ellipses.Axes):
             from matplotlib.patches import Ellipse
 
-            # Following matplotlib.patches.Ellipse documentation 'width' and 'height' are diameters while
-            # 'angle' is rotation in degrees (anti-clockwise)
+            # Following matplotlib.patches.Ellipse documentation 'width' and
+            # 'height' are diameters while 'angle' is rotation in degrees
+            # (anti-clockwise)
             axis.add_artist(Ellipse((c + x0, r + y0), height=2*symb.getA(), width=2*symb.getB(),
                                     angle=90.0 + math.degrees(symb.getTheta()),
                                     edgecolor=mapCtype(ctype), facecolor='none'))
@@ -466,7 +476,6 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             for ds9Cmd in ds9Regions.dot(symb, c + x0, r + y0, size, fontFamily="helvetica", textAngle=None):
                 tmp = ds9Cmd.split('#')
                 cmd = tmp.pop(0).split()
-                comment = tmp.pop(0) if tmp else "" # noqa: ignore=F581
 
                 cmd, args = cmd[0], cmd[1:]
 
@@ -664,7 +673,8 @@ class AsinhNormalize(Normalize):
         """Initialise an object able to carry out an asinh mapping
 
         @param minimum   Minimum pixel value (default: 0)
-        @param dataRange Range of values for stretch if Q=0; roughly the linear part (default: 1)
+        @param dataRange Range of values for stretch if Q=0; roughly the
+                         linear part (default: 1)
         @param Q Softening parameter (default: 8)
 
         See Lupton et al., PASP 116, 133
@@ -680,7 +690,8 @@ class AsinhZScaleNormalize(Normalize):
     def __init__(self, image=None, Q=8):
         """Initialise an object able to carry out an asinh mapping
 
-        @param image  image to use estimate minimum and dataRange using zscale (see AsinhNormalize)
+        @param image  image to use estimate minimum and dataRange using zscale
+                      (see AsinhNormalize)
         @param Q Softening parameter (default: 8)
 
         See Lupton et al., PASP 116, 133
@@ -698,7 +709,8 @@ class ZScaleNormalize(Normalize):
 
         @param image to be used to estimate the stretch
         @param nSamples Number of data points to use (default: 1000)
-        @param contrast Control the range of pixels to display around the median (default: 0.25)
+        @param contrast Control the range of pixels to display around the
+                        median (default: 0.25)
         """
 
         Normalize.__init__(self)
