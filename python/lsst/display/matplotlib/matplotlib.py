@@ -34,6 +34,7 @@ import matplotlib.pyplot as pyplot
 import matplotlib.cbook
 import matplotlib.colors as mpColors
 from matplotlib.blocking_input import BlockingInput
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 import numpy as np
 import numpy.ma as ma
@@ -47,6 +48,7 @@ import lsst.afw.display.ds9Regions as ds9Regions
 import lsst.afw.image as afwImage
 
 import lsst.afw.geom as afwGeom
+import lsst.geom as geom
 
 #
 # Set the list of backends which support _getEvent and thus interact()
@@ -96,33 +98,62 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     backends is given by lsst.display.matplotlib.interactiveBackends
     """
     def __init__(self, display, verbose=False,
-                 interpretMaskBits=True, mtvOrigin=afwImage.PARENT, fastMaskDisplay=True,
-                 reopenPlot=False, *args, **kwargs):
+                 interpretMaskBits=True, mtvOrigin=afwImage.PARENT, fastMaskDisplay=False,
+                 reopenPlot=False, useSexagesimal=False, dpi=None, *args, **kwargs):
         """
         Initialise a matplotlib display
 
-        @param fastMaskDisplay      If True, only show the first bitplane
-                                    that's set in each pixel
-                                    (e.g. if (SATURATED & DETECTED), ignore
-                                    DETECTED)
+        @param fastMaskDisplay      If True only show the first bitplane that's
+                                    set in each pixel
+                                    (e.g. if (SATURATED & DETECTED)
+                                    ignore DETECTED)
                                     Not really what we want, but a bit faster
         @param interpretMaskBits    Interpret the mask value under the cursor
         @param mtvOrigin            Display pixel coordinates with LOCAL origin
                                     (bottom left == 0,0 not XY0)
         @param reopenPlot           If true, close the plot before opening it.
                                     (useful with e.g. %ipympl)
+        @param useSexagesimal       If True, display coordinates in sexagesimal
+                                    E.g. hh:mm:ss.ss (default:False)
+                                    May be changed by calling
+                                          display.useSexagesimal()
+        @param dpi                  Number of dpi (passed to pyplot.figure)
+
+        The `frame` argument to `Display` may be a matplotlib figure; this
+        permits code such as
+           fig, axes = plt.subplots(1, 2)
+
+           disp = afwDisplay.Display(fig)
+           disp.scale('asinh', 'zscale', Q=0.5)
+
+           for axis, exp in zip(axes, exps):
+              plt.sca(axis)    # make axis active
+              disp.mtv(exp)
         """
+        if hasattr(display.frame, "number"):   # the "display" quacks like a matplotlib figure
+            figure = display.frame
+        else:
+            figure = None
+
         virtualDevice.DisplayImpl.__init__(self, display, verbose)
 
         if reopenPlot:
             pyplot.close(display.frame)
-        self._figure = pyplot.figure(display.frame)
+
+        if figure is not None:
+            self._figure = figure
+        else:
+            self._figure = pyplot.figure(display.frame, dpi=dpi)
+            self._figure.clf()
+
         self._display = display
         self._maskTransparency = {None: 0.7}
         self._interpretMaskBits = interpretMaskBits  # interpret mask bits in mtv
         self._fastMaskDisplay = fastMaskDisplay
+        self._useSexagesimal = [useSexagesimal]  # use an array so we can modify the value in format_coord
         self._mtvOrigin = mtvOrigin
-        self._mappable = None
+        self._mappable_ax = None
+        self._colorbar_ax = None
         self._image_colormap = pyplot.cm.gray
         #
         self.__alpha = unicodedata.lookup("GREEK SMALL LETTER alpha")  # used in cursor display string
@@ -148,7 +179,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._image = None
         self._mask = None
         self._wcs = None
-        self._figure.gca().format_coord = None  # keeps a copy of _wcs
+        self._figure.gca().format_coord = lambda x, y: None  # keeps a copy of _wcs
 
     def _show(self):
         """Put the plot at the top of the window stacking order"""
@@ -172,28 +203,101 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     # Extensions to the API
     #
     def savefig(self, *args, **kwargs):
-        """Defer to figure.savefig()"""
+        """Defer to figure.savefig()
+
+        Parameters
+        ----------
+        args : `list`
+          Passed through to figure.savefig()
+        kwargs : `dict`
+          Passed through to figure.savefig()
+        """
         self._figure.savefig(*args, **kwargs)
 
-    def show_colorbar(self, show=True):
-        """Show (or hide) the colour bar"""
+    def show_colorbar(self, show=True, where="right", axSize="5%", axPad=None, **kwargs):
+        """Show (or hide) the colour bar
+
+        Parameters
+        ----------
+        show : `bool`
+          Should I show the colour bar?
+        where : `str`
+          Location of colour bar: "right" or "bottom"
+        axSize : `float` or `str`
+          Size of axes to hold the colour bar; fraction of current x-size
+        axPad : `float` or `str`
+          Padding between axes and colour bar; fraction of current x-size
+        args : `list`
+          Passed through to colorbar()
+        kwargs : `dict`
+          Passed through to colorbar()
+
+        We set the default padding to put the colourbar in a reasonable
+        place for roughly square plots, but you may need to fiddle for
+        plots with extreme axis ratios.
+
+        You can only configure the colorbar when it isn't yet visible, but
+        as you can easily remove it this is not in practice a difficulty.
+        """
         if show:
-            if self._mappable:
-                self._figure.colorbar(self._mappable)
+            if self._mappable_ax:
+                if self._colorbar_ax is None:
+                    orientationDict = dict(right="vertical", bottom="horizontal")
+
+                    mappable, ax = self._mappable_ax
+
+                    if where in orientationDict:
+                        orientation = orientationDict[where]
+                    else:
+                        print(f"Unknown location {where}; "
+                              f"please use one of {', '.join(orientationDict.keys())}")
+
+                    if axPad is None:
+                        axPad = 0.1 if orientation == "vertical" else 0.3
+
+                    divider = make_axes_locatable(ax)
+                    self._colorbar_ax = divider.append_axes(where, size=axSize, pad=axPad)
+
+                    self._figure.colorbar(mappable, cax=self._colorbar_ax, orientation=orientation, **kwargs)
+
+                    try:                # fails with %matplotlib inline
+                        pyplot.sca(ax)  # make main window active again
+                    except ValueError:
+                        pass
+        else:
+            if self._colorbar_ax is not None:
+                self._colorbar_ax.remove()
+                self._colorbar_ax = None
+
+    def useSexagesimal(self, useSexagesimal):
+        """Control the formatting coordinates as HH:MM:SS.ss
+
+        Parameters
+        ----------
+        useSexagesimal : `bool`
+           Print coordinates as e.g. HH:MM:SS.ss iff True
+
+        N.b. can also be set in Display's ctor
+        """
+
+        """Are we formatting coordinates as HH:MM:SS.ss?"""
+        self._useSexagesimal[0] = useSexagesimal
 
     def wait(self, prompt="[c(ontinue) p(db)] :", allowPdb=True):
         """Wait for keyboard input
 
-        @param prompt `str`
+        Parameters
+        ----------
+        prompt : `str`
            The prompt string.
-        @param allowPdb `bool`
+        allowPdb : `bool`
            If true, entering a 'p' or 'pdb' puts you into pdb
 
         Returns the string you entered
 
         Useful when plotting from a programme that exits such as a processCcd
-        Any key except 'p' continues; 'p' puts you into pdb (unless allowPdb
-        is False)
+        Any key except 'p' continues; 'p' puts you into pdb (unless
+        allowPdb is False)
         """
         while True:
             s = input(prompt)
@@ -233,13 +337,15 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             self._i_scale(self._scaleArgs['algorithm'], self._scaleArgs['minval'], self._scaleArgs['maxval'],
                           self._scaleArgs['unit'], *self._scaleArgs['args'], **self._scaleArgs['kwargs'])
 
-        self._figure.clf()              # calling erase() calls _mtv
+        ax = self._figure.gca()
+        ax.cla()
 
         self._i_mtv(image, wcs, title, False)
-        ax = self._figure.gca()
 
         if mask:
             self._i_mtv(mask, wcs, title, True)
+
+        self.show_colorbar()
 
         if title:
             ax.set_title(title)
@@ -247,7 +353,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._title = title
 
         def format_coord(x, y, wcs=self._wcs, x0=self._xy0[0], y0=self._xy0[1],
-                         origin=afwImage.PARENT, bbox=self._image.getBBox(afwImage.PARENT)):
+                         origin=afwImage.PARENT, bbox=self._image.getBBox(afwImage.PARENT),
+                         _useSexagesimal=self._useSexagesimal):
 
             fmt = '(%1.2f, %1.2f)'
             if self._mtvOrigin == afwImage.PARENT:
@@ -257,10 +364,24 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
             col = int(x + 0.5)
             row = int(y + 0.5)
-            if bbox.contains(afwGeom.PointI(col, row)):
+            if bbox.contains(geom.PointI(col, row)):
                 if wcs is not None:
-                    ra, dec = wcs.pixelToSky(x, y)
-                    msg += r" (%s, %s): (%9.4f, %9.4f)" % (self.__alpha, self.__delta, ra, dec)
+                    raDec = wcs.pixelToSky(x, y)
+                    ra = raDec[0].asDegrees()
+                    dec = raDec[1].asDegrees()
+
+                    if _useSexagesimal[0]:
+                        from astropy import units as u
+                        from astropy.coordinates import Angle as apAngle
+
+                        kwargs = dict(sep=':', pad=True, precision=2)
+                        ra = apAngle(ra*u.deg).to_string(unit=u.hour, **kwargs)
+                        dec = apAngle(dec*u.deg).to_string(unit=u.deg, **kwargs)
+                    else:
+                        ra = "%9.4f" % ra
+                        dec = "%9.4f" % dec
+
+                    msg += r" (%s, %s): (%s, %s)" % (self.__alpha, self.__delta, ra, dec)
 
                 msg += ' %1.3f' % (self._image[col, row])
                 if self._mask:
@@ -273,14 +394,12 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             return msg
 
         ax.format_coord = format_coord
-        # Stop images from reporting their value as we've already printed it
-        # nicely
-        from matplotlib.image import AxesImage
-        for a in ax.mouseover_set:
-            if isinstance(a, AxesImage):
-                a.get_cursor_data = lambda ev: None  # disabled
+        # Stop images from reporting their value as we've already
+        # printed it nicely
+        for a in ax.get_images():
+            a.get_cursor_data = lambda ev: None  # disabled
 
-        self._figure.tight_layout()
+        # using tight_layout() is too tight and clips the axes
         self._figure.canvas.draw_idle()
 
     def _i_mtv(self, data, wcs, title, isMask):
@@ -363,9 +482,15 @@ class DisplayImpl(virtualDevice.DisplayImpl):
                     ax.imshow(maskArr, origin='lower', interpolation='nearest',
                               extent=extent, cmap=cmap, norm=norm)
             else:
+                # If we're playing with subplots and have reset the axis
+                # the cached colorbar axis belongs to the old one, so set
+                # it to None
+                if self._mappable_ax and self._mappable_ax[1] != self._figure.gca():
+                    self._colorbar_ax = None
+
                 mappable = ax.imshow(dataArr, origin='lower', interpolation='nearest',
                                      extent=extent, cmap=cmap, norm=norm)
-                self._mappable = mappable
+                self._mappable_ax = (mappable, ax)
 
         self._figure.canvas.draw_idle()
 
@@ -376,7 +501,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._wcs = wcs
         self._xy0 = self._image.getXY0() if self._image else (0, 0)
 
-        self._zoomfac = 1.0
+        self._zoomfac = None
         if self._image is None:
             self._width, self._height = 0, 0
         else:
@@ -413,23 +538,10 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
     def _erase(self):
         """Erase the display"""
-        #
-        # Rather than erase only the glyphs we'll redraw the image.
-        #
-        # This isn't a great solution.
-        #
-        self._figure.clf()
 
-        if self._image:
-            zoomfac = self._zoomfac
-            xcen = self._xcen
-            ycen = self._ycen
-
-            self._mtv(self._image, mask=self._mask, wcs=self._wcs, title=self._title)
-
-            self._xcen = xcen
-            self._ycen = ycen
-            self._zoom(zoomfac)
+        for axis in self._figure.axes:
+            axis.lines = []
+            axis.texts = []
 
         self._figure.canvas.draw_idle()
 
@@ -514,6 +626,11 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     def _scale(self, algorithm, minval, maxval, unit, *args, **kwargs):
         """
         Set gray scale
+
+        N.b.  Supports extra arguments:
+        @param maskedPixels  List of names of mask bits to ignore
+                             E.g. ["BAD", "INTERP"].
+                             A single name is also supported
         """
         self._scaleArgs['algorithm'] = algorithm
         self._scaleArgs['minval'] = minval
@@ -529,13 +646,26 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             pass
 
     def _i_scale(self, algorithm, minval, maxval, unit, *args, **kwargs):
+
+        maskedPixels = kwargs.get("maskedPixels", [])
+        if isinstance(maskedPixels, str):
+            maskedPixels = [maskedPixels]
+        bitmask = afwImage.Mask.getPlaneBitMask(maskedPixels)
+
+        sctrl = afwMath.StatisticsControl()
+        sctrl.setAndMask(bitmask)
+
         if minval == "minmax":
             if self._image is None:
                 raise RuntimeError("You may only use minmax if an image is loaded into the display")
 
-            stats = afwMath.makeStatistics(self._image, afwMath.MIN | afwMath.MAX)
+            mi = afwImage.makeMaskedImage(self._image, self._mask)
+            stats = afwMath.makeStatistics(mi, afwMath.MIN | afwMath.MAX, sctrl)
             minval = stats.getValue(afwMath.MIN)
             maxval = stats.getValue(afwMath.MAX)
+        elif minval == "zscale":
+            if bitmask:
+                print("scale(..., 'zscale', maskedPixels=...) is not yet implemented")
 
         if algorithm is None:
             self._normalize = None
@@ -569,6 +699,9 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         self._zoomfac = zoomfac
 
+        if zoomfac is None:
+            return
+
         x0, y0 = self._xy0
 
         size = min(self._width, self._height)
@@ -600,6 +733,9 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     def _getEvent(self, timeout=-1):
         """Listen for a key press, returning (key, x, y)"""
 
+        if timeout < 0:
+            timeout = 24*3600           # -1 generates complaints in QTimer::singleShot.  A day is a long time
+
         mpBackend = matplotlib.get_backend()
         if mpBackend not in interactiveBackends:
             print("The %s matplotlib backend doesn't support display._getEvent()" %
@@ -617,9 +753,9 @@ class BlockingKeyInput(BlockingInput):
     Callable class to retrieve a single keyboard click
     """
     def __init__(self, fig):
-        r"""Create a BlockingKeyInput
+        """Create a BlockingKeyInput
 
-        \param fig The figure to monitor for keyboard events
+        @param fig The figure to monitor for keyboard events
         """
         BlockingInput.__init__(self, fig=fig, eventslist=('key_press_event',))
 
@@ -638,7 +774,7 @@ class BlockingKeyInput(BlockingInput):
     def __call__(self, timeout=-1):
         """
         Blocking call to retrieve a single key click
-        Returns key or None if timeout
+        Returns key or None if timeout (-1: never timeout)
         """
         self.ev = None
 
@@ -679,13 +815,30 @@ class AsinhNormalize(Normalize):
 
         See Lupton et al., PASP 116, 133
         """
-        Normalize.__init__(self)
-
         # The object used to perform the desired mapping
         self.mapping = afwRgb.AsinhMapping(minimum, dataRange, Q)
 
+        vmin, vmax = self._getMinMaxQ()[0:2]
+        if vmax*Q > vmin:
+            vmax *= Q
+        super().__init__(vmin, vmax)
 
-class AsinhZScaleNormalize(Normalize):
+    def _getMinMaxQ(self):
+        """Return an asinh mapping's minimum and maximum value, and Q
+
+        Regrettably this information is not preserved by AsinhMapping
+        so we have to reverse engineer it
+        """
+
+        frac = 0.1                      # magic number in AsinhMapping
+        Q = np.sinh((frac*self.mapping._uint8Max)/self.mapping._slope)/frac
+        dataRange = Q/self.mapping._soften
+
+        vmin = self.mapping.minimum[0]
+        return vmin, vmin + dataRange, Q
+
+
+class AsinhZScaleNormalize(AsinhNormalize):
     """Provide an asinh stretch using zscale to set limits for mtv()"""
     def __init__(self, image=None, Q=8):
         """Initialise an object able to carry out an asinh mapping
@@ -696,10 +849,14 @@ class AsinhZScaleNormalize(Normalize):
 
         See Lupton et al., PASP 116, 133
         """
-        Normalize.__init__(self)
 
         # The object used to perform the desired mapping
         self.mapping = afwRgb.AsinhZScaleMapping(image, Q)
+
+        vmin, vmax = self._getMinMaxQ()[0:2]
+        # n.b. super() would call AsinhNormalize,
+        # and I want to pass min/max to the baseclass
+        Normalize.__init__(self, vmin, vmax)
 
 
 class ZScaleNormalize(Normalize):
@@ -713,10 +870,10 @@ class ZScaleNormalize(Normalize):
                         median (default: 0.25)
         """
 
-        Normalize.__init__(self)
-
         # The object used to perform the desired mapping
         self.mapping = afwRgb.ZScaleMapping(image, nSamples, contrast)
+
+        super().__init__(self.mapping.minimum[0], self.mapping.maximum)
 
 
 class LinearNormalize(Normalize):
@@ -727,8 +884,7 @@ class LinearNormalize(Normalize):
         @param minimum  Minimum value to display
         @param maximum  Maximum value to display
         """
-
-        Normalize.__init__(self)
-
         # The object used to perform the desired mapping
         self.mapping = afwRgb.LinearMapping(minimum, maximum)
+
+        super().__init__(self.mapping.minimum[0], self.mapping.maximum)
