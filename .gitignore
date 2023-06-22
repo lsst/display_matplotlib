@@ -3,6 +3,7 @@ _build.*
 *.pyc
 .sconf_temp
 .sconsign.dblite
+.pytest_cache
 config.log
 doc/*.tag
 doc/html

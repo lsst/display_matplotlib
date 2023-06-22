@@ -28,12 +28,10 @@
 import math
 import sys
 import unicodedata
-import warnings
 
 import matplotlib.pyplot as pyplot
 import matplotlib.cbook
 import matplotlib.colors as mpColors
-from matplotlib.blocking_input import BlockingInput
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 import numpy as np
@@ -168,11 +166,6 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         # zscale/minmax; set in mtv
         #
         self._i_setImage(None)
-        #
-        # Ignore warnings due to BlockingKeyInput
-        #
-        if not verbose:
-            warnings.filterwarnings("ignore", category=matplotlib.cbook.mplDeprecation)
 
     def _close(self):
         """!Close the display, cleaning up any allocated resources"""
@@ -742,45 +735,24 @@ class DisplayImpl(virtualDevice.DisplayImpl):
                   (matplotlib.get_backend(),), file=sys.stderr)
             return interface.Event('q')
 
-        blocking_input = BlockingKeyInput(self._figure)
-        return blocking_input(timeout=timeout)
+        event = None
 
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+        # We set up a blocking event loop. On receipt of a keypress, the
+        # callback records the event and unblocks the loop.
 
+        def recordKeypress(keypress):
+            """Matplotlib callback to record keypress and unblock"""
+            nonlocal event
+            event = interface.Event(keypress.key, keypress.xdata, keypress.ydata)
+            self._figure.canvas.stop_event_loop()
 
-class BlockingKeyInput(BlockingInput):
-    """
-    Callable class to retrieve a single keyboard click
-    """
-    def __init__(self, fig):
-        """Create a BlockingKeyInput
-
-        @param fig The figure to monitor for keyboard events
-        """
-        BlockingInput.__init__(self, fig=fig, eventslist=('key_press_event',))
-
-    def post_event(self):
-        """
-        Return the event containing the key and (x, y)
-        """
+        conn = self._figure.canvas.mpl_connect("key_press_event", recordKeypress)
         try:
-            event = self.events[-1]
-        except IndexError:
-            # details of the event to pass back to the display
-            self.ev = None
-        else:
-            self.ev = interface.Event(event.key, event.xdata, event.ydata)
+            self._figure.canvas.start_event_loop(timeout=timeout)  # Blocks on keypress
+        finally:
+            self._figure.canvas.mpl_disconnect(conn)
+        return event
 
-    def __call__(self, timeout=-1):
-        """
-        Blocking call to retrieve a single key click
-        Returns key or None if timeout (-1: never timeout)
-        """
-        self.ev = None
-
-        BlockingInput.__call__(self, n=1, timeout=timeout)
-
-        return self.ev
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
