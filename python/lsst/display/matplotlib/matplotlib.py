@@ -125,7 +125,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
            disp.scale('asinh', 'zscale', Q=0.5)
 
            for axis, exp in zip(axes, exps):
-              plt.sca(axis)    # make axis active
+              fig.sca(axis)    # make axis active
               disp.mtv(exp)
         """
         if hasattr(display.frame, "number"):   # the "display" quacks like a matplotlib figure
