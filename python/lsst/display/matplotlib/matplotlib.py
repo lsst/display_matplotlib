@@ -510,7 +510,10 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         """
         if not isinstance(cmap, mpColors.Colormap):
-            cmap = getattr(matplotlib.cm, cmap)
+            try:
+                cmap = matplotlib.colormaps[cmap]
+            except AttributeError:
+                cmap = getattr(matplotlib.cm, cmap)
 
         self._image_colormap = cmap
 
