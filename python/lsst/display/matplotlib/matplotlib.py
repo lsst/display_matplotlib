@@ -32,7 +32,6 @@ import unicodedata
 import matplotlib
 import matplotlib.cm
 import matplotlib.figure
-import matplotlib.pyplot as pyplot
 import matplotlib.cbook
 import matplotlib.colors as mpColors
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -144,11 +143,13 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         virtualDevice.DisplayImpl.__init__(self, display, verbose)
 
         if reopenPlot:
+            import matplotlib.pyplot as pyplot
             pyplot.close(display.frame)
 
         if figure is not None:
             self._figure = figure
         else:
+            import matplotlib.pyplot as pyplot
             self._figure = pyplot.figure(display.frame, dpi=dpi)
             self._figure.clf()
 
@@ -528,11 +529,13 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     #
 
     def _buffer(self, enable=True):
-        if enable:
-            pyplot.ioff()
-        else:
-            pyplot.ion()
-            self._figure.show()
+        if sys.modules.get('matplotlib.pyplot', None) is not None:
+            import matplotlib.pyplot as pyplot
+            if enable:
+                pyplot.ioff()
+            else:
+                pyplot.ion()
+                self._figure.show()
 
     def _flush(self):
         pass
