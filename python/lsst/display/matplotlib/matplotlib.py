@@ -31,6 +31,7 @@ import unicodedata
 
 import matplotlib
 import matplotlib.cm
+import matplotlib.figure
 import matplotlib.pyplot as pyplot
 import matplotlib.cbook
 import matplotlib.colors as mpColors
@@ -130,7 +131,12 @@ class DisplayImpl(virtualDevice.DisplayImpl):
               fig.sca(axis)    # make axis active
               disp.mtv(exp)
         """
-        if hasattr(display.frame, "number"):   # the "display" quacks like a matplotlib figure
+        try:
+            fig_class = matplotlib.figure.FigureBase
+        except AttributeError:
+            fig_class = matplotlib.figure.Figure
+
+        if isinstance(display.frame, fig_class):
             figure = display.frame
         else:
             figure = None
