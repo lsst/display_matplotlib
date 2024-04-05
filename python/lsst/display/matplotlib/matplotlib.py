@@ -130,10 +130,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
               fig.sca(axis)    # make axis active
               disp.mtv(exp)
         """
-        try:
-            fig_class = matplotlib.figure.FigureBase
-        except AttributeError:
-            fig_class = matplotlib.figure.Figure
+        fig_class = matplotlib.figure.FigureBase
 
         if isinstance(display.frame, fig_class):
             figure = display.frame
