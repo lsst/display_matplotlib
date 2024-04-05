@@ -526,7 +526,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     #
 
     def _buffer(self, enable=True):
-        if sys.modules.get('matplotlib.pyplot', None) is not None:
+        if sys.modules.get('matplotlib.pyplot') is not None:
             import matplotlib.pyplot as pyplot
             if enable:
                 pyplot.ioff()
