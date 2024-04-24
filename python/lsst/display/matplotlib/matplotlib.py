@@ -29,7 +29,9 @@ import math
 import sys
 import unicodedata
 
-import matplotlib.pyplot as pyplot
+import matplotlib
+import matplotlib.cm
+import matplotlib.figure
 import matplotlib.cbook
 import matplotlib.colors as mpColors
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -125,10 +127,12 @@ class DisplayImpl(virtualDevice.DisplayImpl):
            disp.scale('asinh', 'zscale', Q=0.5)
 
            for axis, exp in zip(axes, exps):
-              plt.sca(axis)    # make axis active
+              fig.sca(axis)    # make axis active
               disp.mtv(exp)
         """
-        if hasattr(display.frame, "number"):   # the "display" quacks like a matplotlib figure
+        fig_class = matplotlib.figure.FigureBase
+
+        if isinstance(display.frame, fig_class):
             figure = display.frame
         else:
             figure = None
@@ -136,11 +140,13 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         virtualDevice.DisplayImpl.__init__(self, display, verbose)
 
         if reopenPlot:
+            import matplotlib.pyplot as pyplot
             pyplot.close(display.frame)
 
         if figure is not None:
             self._figure = figure
         else:
+            import matplotlib.pyplot as pyplot
             self._figure = pyplot.figure(display.frame, dpi=dpi)
             self._figure.clf()
 
@@ -152,7 +158,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._mtvOrigin = mtvOrigin
         self._mappable_ax = None
         self._colorbar_ax = None
-        self._image_colormap = pyplot.cm.gray
+        self._image_colormap = matplotlib.cm.gray
         #
         self.__alpha = unicodedata.lookup("GREEK SMALL LETTER alpha")  # used in cursor display string
         self.__delta = unicodedata.lookup("GREEK SMALL LETTER delta")  # used in cursor display string
@@ -252,11 +258,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
                     self._colorbar_ax = divider.append_axes(where, size=axSize, pad=axPad)
 
                     self._figure.colorbar(mappable, cax=self._colorbar_ax, orientation=orientation, **kwargs)
+                    self._figure.sca(ax)
 
-                    try:                # fails with %matplotlib inline
-                        pyplot.sca(ax)  # make main window active again
-                    except ValueError:
-                        pass
         else:
             if self._colorbar_ax is not None:
                 self._colorbar_ax.remove()
@@ -454,7 +457,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         extent = (bbox.getBeginX() - 0.5, bbox.getEndX() - 0.5,
                   bbox.getBeginY() - 0.5, bbox.getEndY() - 0.5)
 
-        with pyplot.rc_context(dict(interactive=False)):
+        with matplotlib.rc_context(dict(interactive=False)):
             if isMask:
                 for i, p in reversed(list(enumerate(planeList))):
                     if colors[i + 1][alphaChannel] == 0:  # colors[0] is reserved
@@ -506,12 +509,12 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     def _setImageColormap(self, cmap):
         """Set the colormap used for the image
 
-        cmap should be either the name of an attribute of pyplot.cm or an
-        mpColors.Colormap (e.g. "gray" or pyplot.cm.gray)
+        cmap should be either the name of an attribute of matplotlib.cm or an
+        mpColors.Colormap (e.g. "gray" or matplotlib.cm.gray)
 
         """
         if not isinstance(cmap, mpColors.Colormap):
-            cmap = getattr(pyplot.cm, cmap)
+            cmap = matplotlib.colormaps[cmap]
 
         self._image_colormap = cmap
 
@@ -520,11 +523,13 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     #
 
     def _buffer(self, enable=True):
-        if enable:
-            pyplot.ioff()
-        else:
-            pyplot.ion()
-            self._figure.show()
+        if sys.modules.get('matplotlib.pyplot') is not None:
+            import matplotlib.pyplot as pyplot
+            if enable:
+                pyplot.ioff()
+            else:
+                pyplot.ion()
+                self._figure.show()
 
     def _flush(self):
         pass
