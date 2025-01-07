@@ -12,3 +12,4 @@ doc/doxygen.conf
 python/lsst/display/matplotlib/version.py
 tests/.tests
 ups/*.cfgc
+python/*.dist-info/
