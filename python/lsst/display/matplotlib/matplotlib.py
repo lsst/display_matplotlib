@@ -316,7 +316,7 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         """Return the current mask transparency"""
         return self._maskTransparency[maskplane if maskplane in self._maskTransparency else None]
 
-    def _mtv(self, image, mask=None, wcs=None, title=""):
+    def _mtv(self, image, mask=None, wcs=None, title="", metadata=None):
         """Display an Image and/or Mask on a matplotlib display
         """
         title = str(title) if title else ""
