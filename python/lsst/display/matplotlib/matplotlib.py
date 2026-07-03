@@ -50,6 +50,8 @@ import lsst.afw.image as afwImage
 import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 
+from .wcsAxes import WcsAxesManager, astFrameSetFromWcs
+
 #
 # Set the list of backends which support _getEvent and thus interact()
 #
@@ -99,7 +101,8 @@ class DisplayImpl(virtualDevice.DisplayImpl):
     """
     def __init__(self, display, verbose=False,
                  interpretMaskBits=True, mtvOrigin=afwImage.PARENT, fastMaskDisplay=False,
-                 reopenPlot=False, useSexagesimal=False, dpi=None, *args, **kwargs):
+                 reopenPlot=False, useSexagesimal=False, dpi=None,
+                 useWcsAxes=True, wcsGrid=False, astPlotOptions="", *args, **kwargs):
         """
         Initialise a matplotlib display
 
@@ -118,6 +121,19 @@ class DisplayImpl(virtualDevice.DisplayImpl):
                                     May be changed by calling
                                           display.useSexagesimal()
         @param dpi                  Number of dpi (passed to pyplot.figure)
+        @param useWcsAxes           If True (the default) and the data
+                                    have a WCS, draw sky coordinate axes
+                                    using AST instead of pixel axes
+        @param wcsGrid              If True draw the full curvilinear
+                                    coordinate grid across the image
+                                    (only used with useWcsAxes)
+        @param astPlotOptions       Extra AST Plot attribute settings,
+                                    e.g. "Colour(grid)=2" for a red
+                                    grid; these override the defaults.
+                                    N.b. AST colours are 1-based grf
+                                    colour table indices, not names
+                                    (see lsst.display.matplotlib
+                                    .wcsAxes.WcsAxesManager)
 
         The `frame` argument to `Display` may be a matplotlib figure; this
         permits code such as
@@ -156,6 +172,10 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._fastMaskDisplay = fastMaskDisplay
         self._useSexagesimal = [useSexagesimal]  # use an array so we can modify the value in format_coord
         self._mtvOrigin = mtvOrigin
+        self._useWcsAxes = useWcsAxes
+        self._wcsGrid = wcsGrid
+        self._astPlotOptions = astPlotOptions
+        self._wcsAxesManagers = {}      # matplotlib Axes -> WcsAxesManager
         self._mappable_ax = None
         self._colorbar_ax = None
         self._image_colormap = matplotlib.cm.gray
@@ -175,6 +195,9 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
     def _close(self):
         """!Close the display, cleaning up any allocated resources"""
+        for manager in self._wcsAxesManagers.values():
+            manager.remove()
+        self._wcsAxesManagers = {}
         self._image = None
         self._mask = None
         self._wcs = None
@@ -279,6 +302,10 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         """Are we formatting coordinates as HH:MM:SS.ss?"""
         self._useSexagesimal[0] = useSexagesimal
 
+        for manager in self._wcsAxesManagers.values():
+            manager.setSexagesimal(useSexagesimal)
+        self._figure.canvas.draw_idle()
+
     def wait(self, prompt="[c(ontinue) p(db)] :", allowPdb=True):
         """Wait for keyboard input
 
@@ -334,6 +361,9 @@ class DisplayImpl(virtualDevice.DisplayImpl):
                           self._scaleArgs['unit'], *self._scaleArgs['args'], **self._scaleArgs['kwargs'])
 
         ax = self._figure.gca()
+        manager = self._wcsAxesManagers.pop(ax, None)
+        if manager is not None:
+            manager.remove()
         ax.cla()
 
         self._i_mtv(image, wcs, title, False)
@@ -347,6 +377,9 @@ class DisplayImpl(virtualDevice.DisplayImpl):
             ax.set_title(title)
 
         self._title = title
+
+        if wcs is not None and self._useWcsAxes:
+            self._drawWcsAxes(ax, wcs)
 
         def format_coord(x, y, wcs=self._wcs, x0=self._xy0[0], y0=self._xy0[1],
                          origin=afwImage.PARENT, bbox=self._image.getBBox(afwImage.PARENT),
@@ -490,6 +523,29 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         self._figure.canvas.draw_idle()
 
+    def _drawWcsAxes(self, ax, wcs):
+        """Draw sky coordinate axes with AST, hiding the pixel axes.
+
+        Falls back to ordinary pixel axes with a warning if AST cannot
+        draw the given WCS.
+        """
+        # Freeze the view at the image extent; autoscaling in response
+        # to AST artists drawn outside the view would change the limits
+        # and retrigger drawing.
+        ax.set_xlim(*ax.get_xlim())
+        ax.set_ylim(*ax.get_ylim())
+
+        try:
+            frameSet = astFrameSetFromWcs(wcs)
+            self._wcsAxesManagers[ax] = WcsAxesManager(
+                ax, frameSet,
+                grid=self._wcsGrid,
+                useSexagesimal=self._useSexagesimal[0],
+                extraOptions=self._astPlotOptions)
+        except Exception as e:
+            print(f"Unable to draw WCS axes ({e}); using pixel coordinates",
+                  file=sys.stderr)
+
     def _i_setImage(self, image, mask=None, wcs=None):
         """Save the current image, mask, wcs, and XY0"""
         self._image = image
@@ -535,11 +591,14 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         pass
 
     def _erase(self):
-        """Erase the display"""
+        """Erase the display, keeping any WCS axes"""
 
         for axis in self._figure.axes:
-            axis.lines = []
-            axis.texts = []
+            manager = self._wcsAxesManagers.get(axis)
+            keep = set(manager.artists) if manager is not None else set()
+            for artist in list(axis.lines) + list(axis.texts) + list(axis.patches):
+                if artist not in keep:
+                    artist.remove()
 
         self._figure.canvas.draw_idle()
 
