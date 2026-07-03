@@ -32,6 +32,7 @@ __all__ = ["astFrameSetFromWcs", "WcsAxesManager"]
 import astshim
 import matplotlib.text
 import starlink.Ast
+from matplotlib.backend_bases import TimerBase
 from starlink.Grf import grf_matplotlib
 
 
@@ -144,6 +145,7 @@ class WcsAxesManager:
             spine.set_visible(False)
 
         self._redrawing = False
+        self._redrawTimer = None
         self._callbackIds = [
             axes.callbacks.connect("xlim_changed", self._onLimitsChanged),
             axes.callbacks.connect("ylim_changed", self._onLimitsChanged),
@@ -209,8 +211,40 @@ class WcsAxesManager:
                 pass
         self.artists = []
 
+    # Idle time before redrawing after a view change.  Interactive
+    # panning and zooming change the limits on every mouse-motion
+    # event, and a full AST rebuild per event is far too slow.
+    _redrawDelayMs = 200
+
     def _onLimitsChanged(self, axes):
-        """Redraw for new view limits; matplotlib callback."""
+        """Schedule a redraw for new view limits; matplotlib callback.
+
+        The redraw is debounced with a one-shot timer so that a stream
+        of limit changes (interactive panning or zooming, or the x/y
+        pair from a single zoom) produces a single rebuild once the
+        view settles.  Backends without a running event loop cannot
+        fire timers, so there the redraw happens immediately.
+        """
+        if self._redrawing:
+            return
+        if self._redrawTimer is None:
+            canvas = self._axes.get_figure().canvas
+            timer = canvas.new_timer(interval=self._redrawDelayMs)
+            if type(timer) is TimerBase:
+                # The base class is a no-op that never fires.
+                self._redrawNow()
+                return
+            timer.single_shot = True
+            timer.add_callback(self._redrawNow)
+            self._redrawTimer = timer
+        self._redrawTimer.stop()
+        self._redrawTimer.start()
+
+    def _redrawNow(self):
+        """Rebuild the AST axes for the current view and repaint."""
+        if not self._callbackIds:
+            # The manager was removed while a redraw was pending.
+            return
         if self._redrawing:
             return
         self._redrawing = True
@@ -218,6 +252,7 @@ class WcsAxesManager:
             self.draw()
         finally:
             self._redrawing = False
+        self._axes.get_figure().canvas.draw_idle()
 
     def setSexagesimal(self, useSexagesimal):
         """Switch between sexagesimal and decimal degree labels.
@@ -234,6 +269,9 @@ class WcsAxesManager:
 
     def remove(self):
         """Remove the AST axes and restore matplotlib's axis furniture."""
+        if self._redrawTimer is not None:
+            self._redrawTimer.stop()
+            self._redrawTimer = None
         for callbackId in self._callbackIds:
             self._axes.callbacks.disconnect(callbackId)
         self._callbackIds = []

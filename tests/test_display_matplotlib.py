@@ -139,6 +139,37 @@ class WcsAxesManagerTestCase(lsst.utils.tests.TestCase):
         for artist in oldArtists:
             self.assertNotIn(artist, axesArtists)
 
+    def testDebouncedRedraw(self):
+        """With a working timer, drag events coalesce into one redraw."""
+        from matplotlib.backend_bases import TimerBase
+
+        starts = []
+
+        class FakeTimer(TimerBase):
+            def _timer_start(self):
+                starts.append(self)
+
+            def _timer_stop(self):
+                pass
+
+        ax, manager = makeWcsAxes()
+        canvas = ax.get_figure().canvas
+        canvas.new_timer = lambda interval=None: FakeTimer(interval=interval)
+
+        oldArtists = list(manager.artists)
+        for i in range(5):
+            ax.set_xlim(-0.5 + i, 199.5 + i)
+            ax.set_ylim(-0.5 + i, 149.5 + i)
+        # No redraw yet: the debounce timer is pending.
+        self.assertEqual(manager.artists, oldArtists)
+        self.assertGreater(len(starts), 0)
+        # Fire the pending timer: exactly one rebuild for the new view.
+        manager._redrawTimer._on_timer()
+        self.assertNotEqual(manager.artists, oldArtists)
+        axesArtists = set(ax.lines) | set(ax.texts)
+        for artist in oldArtists:
+            self.assertNotIn(artist, axesArtists)
+
     def testNoRedrawAfterRemove(self):
         ax, manager = makeWcsAxes()
         manager.remove()
