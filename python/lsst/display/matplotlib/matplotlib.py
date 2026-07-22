@@ -447,8 +447,6 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
             planeList = range(nMaskPlanes)
 
-            maskArr = np.zeros_like(dataArr, dtype=np.int32)
-
             colorNames = ['black']
             colorGenerator = self.display.maskColorGenerator(omitBW=True)
             for p in planeList:
@@ -492,24 +490,48 @@ class DisplayImpl(virtualDevice.DisplayImpl):
 
         with matplotlib.rc_context(dict(interactive=False)):
             if isMask:
-                for i, p in reversed(list(enumerate(planeList))):
-                    if colors[i + 1][alphaChannel] == 0:  # colors[0] is reserved
-                        continue
-
-                    bitIsSet = (dataArr & (1 << p)) != 0
-                    if bitIsSet.sum() == 0:
-                        continue
-
-                    maskArr[bitIsSet] = i + 1  # + 1 as we set colorNames[0] to black
-
-                    if not self._fastMaskDisplay:  # we draw each bitplane separately
-                        ax.imshow(maskArr, origin='lower', interpolation='nearest',
-                                  extent=extent, cmap=cmap, norm=norm)
-                        maskArr[:] = 0
-
-                if self._fastMaskDisplay:  # we only draw the lowest bitplane
+                if self._fastMaskDisplay:
+                    # Show only the lowest set bitplane in each pixel; a single
+                    # imshow of the plane indices suffices.
+                    maskArr = np.zeros_like(dataArr, dtype=np.int32)
+                    for i, p in reversed(list(enumerate(planeList))):
+                        if colors[i + 1][alphaChannel] == 0:  # colors[0] reserved
+                            continue
+                        bitIsSet = (dataArr & (1 << p)) != 0
+                        if not bitIsSet.any():
+                            continue
+                        maskArr[bitIsSet] = i + 1  # + 1 as colorNames[0] is black
                     ax.imshow(maskArr, origin='lower', interpolation='nearest',
                               extent=extent, cmap=cmap, norm=norm)
+                else:
+                    # Composite every visible bitplane into a single
+                    # full-resolution RGBA image and draw it as one layer.
+                    # The Porter-Duff "over" operator is associative, so
+                    # blending the planes here and drawing the result over the
+                    # image is identical to drawing each plane as its own
+                    # imshow, but matplotlib then colour-maps and resamples one
+                    # layer instead of one per set plane.  The planes are
+                    # composited in the same order they would be drawn
+                    # (highest plane first, so the lowest ends up on top).
+                    composite = np.zeros(dataArr.shape + (4,), dtype=np.float32)
+                    for i, p in reversed(list(enumerate(planeList))):
+                        alpha = colors[i + 1][alphaChannel]
+                        if alpha == 0:  # colors[0] is reserved
+                            continue
+                        bitIsSet = (dataArr & (1 << p)) != 0
+                        if not bitIsSet.any():
+                            continue
+                        # Place this plane's flat colour over the pixels
+                        # accumulated from higher planes (straight-alpha over).
+                        dst = composite[bitIsSet]
+                        dstAlpha = dst[:, 3:4]
+                        outAlpha = alpha + dstAlpha*(1.0 - alpha)
+                        composite[bitIsSet, :3] = \
+                            (colors[i + 1][:3]*alpha +
+                             dst[:, :3]*dstAlpha*(1.0 - alpha))/outAlpha
+                        composite[bitIsSet, 3] = outAlpha[:, 0]
+                    ax.imshow(composite, origin='lower', interpolation='nearest',
+                              extent=extent)
             else:
                 # If we're playing with subplots and have reset the axis
                 # the cached colorbar axis belongs to the old one, so set
