@@ -521,8 +521,6 @@ class DisplayImpl(virtualDevice.DisplayImpl):
                                      extent=extent, cmap=cmap, norm=norm)
                 self._mappable_ax = (mappable, ax)
 
-        self._figure.canvas.draw_idle()
-
     def _drawWcsAxes(self, ax, wcs):
         """Draw sky coordinate axes with AST, hiding the pixel axes.
 
