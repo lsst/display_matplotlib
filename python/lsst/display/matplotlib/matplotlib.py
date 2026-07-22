@@ -432,7 +432,12 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         self._figure.canvas.draw_idle()
 
     def _i_mtv(self, data, wcs, title, isMask):
-        """Internal routine to display an Image or Mask on a DS9 display"""
+        """Internal routine to display an Image or Mask on a matplotlib
+        display.
+
+        Does not trigger a ``canvas.draw_idle`` command since it is assumed
+        that the caller will do that once all the layers have been added.
+        """
 
         title = str(title) if title else ""
         dataArr = data.getArray()
@@ -520,8 +525,6 @@ class DisplayImpl(virtualDevice.DisplayImpl):
                 mappable = ax.imshow(dataArr, origin='lower', interpolation='nearest',
                                      extent=extent, cmap=cmap, norm=norm)
                 self._mappable_ax = (mappable, ax)
-
-        self._figure.canvas.draw_idle()
 
     def _drawWcsAxes(self, ax, wcs):
         """Draw sky coordinate axes with AST, hiding the pixel axes.
