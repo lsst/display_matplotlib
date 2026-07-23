@@ -560,6 +560,13 @@ class DisplayImpl(virtualDevice.DisplayImpl):
         ax.set_xlim(*ax.get_xlim())
         ax.set_ylim(*ax.get_ylim())
 
+        # The colorbar is attached with an axes divider that only resizes
+        # this axes on the next draw.  AST spaces the labels using the
+        # axes geometry as it stands when it measures them, so realise the
+        # pending resize first; otherwise the labels are laid out for the
+        # wider, pre-colorbar axes and collide once the axes shrinks.
+        self._figure.draw_without_rendering()
+
         try:
             frameSet = astFrameSetFromWcs(wcs)
             self._wcsAxesManagers[ax] = WcsAxesManager(
