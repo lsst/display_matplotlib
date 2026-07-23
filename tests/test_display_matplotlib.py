@@ -46,6 +46,21 @@ def makeTestWcs():
     )
 
 
+def makeFineTestWcs():
+    """Return a fine-scale TAN SkyWcs whose decimal labels are wide.
+
+    At this scale the numeric labels nearly fill the gap between ticks,
+    so any mismatch between the axes geometry AST measures against and
+    the geometry it is finally drawn at makes them overlap.
+    """
+    return afwGeom.makeSkyWcs(
+        crpix=lsst.geom.Point2D(150, 150),
+        crval=lsst.geom.SpherePoint(53.0876, -27.5207, lsst.geom.degrees),
+        cdMatrix=afwGeom.makeCdMatrix(scale=0.2*lsst.geom.arcseconds,
+                                      orientation=0*lsst.geom.degrees),
+    )
+
+
 class AstFrameSetTestCase(lsst.utils.tests.TestCase):
     """Tests for the SkyWcs to pyast FrameSet conversion."""
 
@@ -138,6 +153,37 @@ class WcsAxesManagerTestCase(lsst.utils.tests.TestCase):
         axesArtists = set(ax.lines) | set(ax.texts)
         for artist in oldArtists:
             self.assertNotIn(artist, axesArtists)
+
+    def testRedrawOnResize(self):
+        """Resizing the figure re-spaces the labels for the new geometry."""
+        from matplotlib.backend_bases import ResizeEvent
+
+        ax, manager = makeWcsAxes()
+        oldArtists = list(manager.artists)
+        fig = ax.get_figure()
+        fig.set_size_inches(3, 3)
+        ResizeEvent("resize_event", fig.canvas)._process()
+        self.assertGreater(len(manager.artists), 0)
+        self.assertNotEqual(manager.artists, oldArtists)
+        # The old artists must be gone from the axes.
+        axesArtists = set(ax.lines) | set(ax.texts)
+        for artist in oldArtists:
+            self.assertNotIn(artist, axesArtists)
+
+    def testResizeIgnoresUnchangedSize(self):
+        """A resize event at the current size must not trigger a rebuild.
+
+        Interactive web backends (e.g. ipympl) emit resize events
+        repeatedly at the size the figure already has, and a rebuild
+        repaints the canvas and prompts yet another event; acting on each
+        one drives an unbounded repaint loop.
+        """
+        from matplotlib.backend_bases import ResizeEvent
+
+        ax, manager = makeWcsAxes()
+        oldArtists = list(manager.artists)
+        ResizeEvent("resize_event", ax.get_figure().canvas)._process()
+        self.assertEqual(manager.artists, oldArtists)
 
     def testDebouncedRedraw(self):
         """With a working timer, drag events coalesce into one redraw."""
@@ -272,6 +318,41 @@ class WcsAxesDisplayTestCase(lsst.utils.tests.TestCase):
         ax = impl._figure.gca()
         manager = impl._wcsAxesManagers[ax]
         self.assertIn("Grid=1", manager._plotOptions())
+
+    def testLabelsDoNotOverlapColorbar(self):
+        """Numeric labels must be spaced for the axes as finally drawn.
+
+        The colorbar resizes the image axes, and AST must space the
+        labels for that final size rather than the full-width axes it
+        starts from, or wide decimal labels overlap.
+        """
+        exposure = afwImage.ExposureF(300, 300)
+        exposure.image.array[:] = 1.0
+        exposure.setWcs(makeFineTestWcs())
+
+        display = afwDisplay.Display(frame=self.frame)
+        display.mtv(exposure)
+        fig = display._impl._figure
+        ax = fig.gca()
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+
+        # Numeric tick labels drawn horizontally (the bottom, RA axis).
+        boxes = []
+        for artist in ax.texts:
+            text = artist.get_text()
+            if text in ("Right ascension", "Declination"):
+                continue
+            if any(c.isdigit() for c in text) and artist.get_rotation() % 180 == 0:
+                boxes.append(artist.get_window_extent(renderer))
+        # Keep the row nearest the bottom of the axes.
+        yBottom = min(box.y0 for box in boxes)
+        bottom = sorted((box for box in boxes if box.y0 < yBottom + 20),
+                        key=lambda box: box.x0)
+        self.assertGreater(len(bottom), 1)
+        for left, right in zip(bottom, bottom[1:]):
+            self.assertLessEqual(left.x1, right.x0,
+                                 "adjacent RA labels overlap")
 
     def testZoomRedraws(self):
         display = afwDisplay.Display(frame=self.frame)
