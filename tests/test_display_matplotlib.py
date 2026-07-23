@@ -170,6 +170,21 @@ class WcsAxesManagerTestCase(lsst.utils.tests.TestCase):
         for artist in oldArtists:
             self.assertNotIn(artist, axesArtists)
 
+    def testResizeIgnoresUnchangedSize(self):
+        """A resize event at the current size must not trigger a rebuild.
+
+        Interactive web backends (e.g. ipympl) emit resize events
+        repeatedly at the size the figure already has, and a rebuild
+        repaints the canvas and prompts yet another event; acting on each
+        one drives an unbounded repaint loop.
+        """
+        from matplotlib.backend_bases import ResizeEvent
+
+        ax, manager = makeWcsAxes()
+        oldArtists = list(manager.artists)
+        ResizeEvent("resize_event", ax.get_figure().canvas)._process()
+        self.assertEqual(manager.artists, oldArtists)
+
     def testDebouncedRedraw(self):
         """With a working timer, drag events coalesce into one redraw."""
         from matplotlib.backend_bases import TimerBase

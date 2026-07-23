@@ -146,14 +146,15 @@ class WcsAxesManager:
 
         self._redrawing = False
         self._redrawTimer = None
+        self._renderedSize = None
         self._callbackIds = [
-            axes.callbacks.connect("xlim_changed", self._onViewChanged),
-            axes.callbacks.connect("ylim_changed", self._onViewChanged),
+            axes.callbacks.connect("xlim_changed", self._onLimitsChanged),
+            axes.callbacks.connect("ylim_changed", self._onLimitsChanged),
         ]
         # A figure resize changes the axes size without changing the view
         # limits, so the labels must be re-spaced for the new geometry too.
         self._resizeCallbackId = axes.get_figure().canvas.mpl_connect(
-            "resize_event", self._onViewChanged)
+            "resize_event", self._onResize)
 
         try:
             self.draw()
@@ -205,6 +206,14 @@ class WcsAxesManager:
             if isinstance(artist, matplotlib.text.Text):
                 artist.set_clip_on(False)
 
+        # Record the size the labels were spaced for, so a later resize
+        # event that leaves the size unchanged can be ignored.
+        self._renderedSize = self._canvasSize()
+
+    def _canvasSize(self):
+        """Return the current canvas size in device pixels."""
+        return tuple(self._axes.get_figure().canvas.get_width_height())
+
     def _removeArtists(self):
         """Remove the AST artists from the axes."""
         for artist in self.artists:
@@ -220,17 +229,35 @@ class WcsAxesManager:
     # event, and a full AST rebuild per event is far too slow.
     _redrawDelayMs = 200
 
-    def _onViewChanged(self, event):
-        """Schedule a redraw after a view or size change; matplotlib callback.
+    def _onLimitsChanged(self, axes):
+        """Schedule a redraw for new view limits; matplotlib callback.
 
-        Connected to the axes' ``xlim_changed``/``ylim_changed`` and the
-        canvas' ``resize_event``; the ``event`` argument (the axes or a
-        resize event) is unused.  The redraw is debounced with a one-shot
-        timer so that a stream of changes (interactive panning or zooming,
-        the x/y pair from a single zoom, or a drag-resize) produces a
-        single rebuild once the view settles.  Backends without a running
-        event loop cannot fire timers, so there the redraw happens
-        immediately.
+        The ``axes`` argument (the axes the callback fired for) is unused.
+        """
+        self._scheduleRedraw()
+
+    def _onResize(self, event):
+        """Schedule a redraw for a new figure size; matplotlib callback.
+
+        The ``event`` argument (the resize event) is unused.  Interactive
+        web backends (e.g. ipympl) emit ``resize_event`` repeatedly at the
+        size the figure already has, and a redraw repaints the canvas,
+        which prompts yet another such event; acting on every one produces
+        an unbounded rebuild loop.  Rebuild only when the canvas has
+        actually changed size since it was last drawn.
+        """
+        if self._canvasSize() == self._renderedSize:
+            return
+        self._scheduleRedraw()
+
+    def _scheduleRedraw(self):
+        """Debounce a rebuild of the AST axes after a view or size change.
+
+        The redraw is debounced with a one-shot timer so that a stream of
+        changes (interactive panning or zooming, the x/y pair from a single
+        zoom, or a drag-resize) produces a single rebuild once the view
+        settles.  Backends without a running event loop cannot fire timers,
+        so there the redraw happens immediately.
         """
         if self._redrawing:
             return
