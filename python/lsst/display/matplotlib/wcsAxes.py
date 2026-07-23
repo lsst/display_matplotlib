@@ -147,9 +147,13 @@ class WcsAxesManager:
         self._redrawing = False
         self._redrawTimer = None
         self._callbackIds = [
-            axes.callbacks.connect("xlim_changed", self._onLimitsChanged),
-            axes.callbacks.connect("ylim_changed", self._onLimitsChanged),
+            axes.callbacks.connect("xlim_changed", self._onViewChanged),
+            axes.callbacks.connect("ylim_changed", self._onViewChanged),
         ]
+        # A figure resize changes the axes size without changing the view
+        # limits, so the labels must be re-spaced for the new geometry too.
+        self._resizeCallbackId = axes.get_figure().canvas.mpl_connect(
+            "resize_event", self._onViewChanged)
 
         try:
             self.draw()
@@ -216,14 +220,17 @@ class WcsAxesManager:
     # event, and a full AST rebuild per event is far too slow.
     _redrawDelayMs = 200
 
-    def _onLimitsChanged(self, axes):
-        """Schedule a redraw for new view limits; matplotlib callback.
+    def _onViewChanged(self, event):
+        """Schedule a redraw after a view or size change; matplotlib callback.
 
-        The redraw is debounced with a one-shot timer so that a stream
-        of limit changes (interactive panning or zooming, or the x/y
-        pair from a single zoom) produces a single rebuild once the
-        view settles.  Backends without a running event loop cannot
-        fire timers, so there the redraw happens immediately.
+        Connected to the axes' ``xlim_changed``/``ylim_changed`` and the
+        canvas' ``resize_event``; the ``event`` argument (the axes or a
+        resize event) is unused.  The redraw is debounced with a one-shot
+        timer so that a stream of changes (interactive panning or zooming,
+        the x/y pair from a single zoom, or a drag-resize) produces a
+        single rebuild once the view settles.  Backends without a running
+        event loop cannot fire timers, so there the redraw happens
+        immediately.
         """
         if self._redrawing:
             return
@@ -275,6 +282,7 @@ class WcsAxesManager:
         for callbackId in self._callbackIds:
             self._axes.callbacks.disconnect(callbackId)
         self._callbackIds = []
+        self._axes.get_figure().canvas.mpl_disconnect(self._resizeCallbackId)
 
         self._removeArtists()
 

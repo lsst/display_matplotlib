@@ -154,6 +154,22 @@ class WcsAxesManagerTestCase(lsst.utils.tests.TestCase):
         for artist in oldArtists:
             self.assertNotIn(artist, axesArtists)
 
+    def testRedrawOnResize(self):
+        """Resizing the figure re-spaces the labels for the new geometry."""
+        from matplotlib.backend_bases import ResizeEvent
+
+        ax, manager = makeWcsAxes()
+        oldArtists = list(manager.artists)
+        fig = ax.get_figure()
+        fig.set_size_inches(3, 3)
+        ResizeEvent("resize_event", fig.canvas)._process()
+        self.assertGreater(len(manager.artists), 0)
+        self.assertNotEqual(manager.artists, oldArtists)
+        # The old artists must be gone from the axes.
+        axesArtists = set(ax.lines) | set(ax.texts)
+        for artist in oldArtists:
+            self.assertNotIn(artist, axesArtists)
+
     def testDebouncedRedraw(self):
         """With a working timer, drag events coalesce into one redraw."""
         from matplotlib.backend_bases import TimerBase
